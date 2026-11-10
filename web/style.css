@@ -1,0 +1,356 @@
+:root {
+  --bg: #0b1220;
+  --panel: #111d30;
+  --raised: #1a2940;
+  --line: #2b3d55;
+  --text: #e6edf5;
+  --muted: #94a9c0;
+  --accent: #57d1c9;
+  --font: Arial, "Malgun Gothic", "Noto Sans CJK KR", sans-serif;
+  font-size: 14px;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+}
+header {
+  height: 78px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 22px;
+  background: #101c2e;
+}
+.brand b {
+  font-size: 29px;
+  letter-spacing: -1px;
+}
+.brand span {
+  color: var(--accent);
+}
+.brand small {
+  display: block;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.actions {
+  display: flex;
+  gap: 7px;
+}
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--raised);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+}
+button {
+  cursor: pointer;
+}
+button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--accent);
+}
+main {
+  height: calc(100vh - 78px);
+  display: grid;
+  grid-template-columns: 225px minmax(390px, 1fr) minmax(390px, 500px);
+}
+aside {
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  padding: 17px 12px;
+}
+.section-title {
+  font-size: 11px;
+  letter-spacing: 1.6px;
+  color: var(--muted);
+  margin: 3px 7px 17px;
+}
+.job {
+  padding: 13px 10px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  margin-bottom: 7px;
+  word-break: break-word;
+  background: #111d30;
+}
+.job.active {
+  border-color: var(--accent);
+  background: #153038;
+}
+.job small {
+  display: block;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.aside-note {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--muted);
+  padding: 20px 6px;
+}
+.workspace {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 13px 15px;
+  gap: 8px;
+}
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+.viewer-toolbar select {
+  max-width: 145px;
+}
+#viewer {
+  position: relative;
+  min-height: 210px;
+  flex: 1;
+  background: #101b2b;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#status {
+  min-height: 37px;
+  border-left: 3px solid var(--accent);
+  background: #162d35;
+  border-radius: 4px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+#status.error {
+  border-color: #ef8095;
+  background: #3a2231;
+}
+.timeline,
+.plot-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12px;
+}
+.timeline input {
+  flex: 1;
+}
+.plot-header {
+  justify-content: space-between;
+  margin-top: 3px;
+}
+#plot {
+  width: 100%;
+  height: 185px;
+  min-height: 140px;
+  background: #101b2b;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.inspector {
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+}
+nav button {
+  font-size: 12px;
+  background: transparent;
+  border-color: transparent;
+}
+nav button.active {
+  background: #22424a;
+  color: var(--accent);
+}
+#panel {
+  padding: 16px;
+  overflow: auto;
+  flex: 1;
+}
+h2 {
+  font-size: 17px;
+  margin: 0 0 14px;
+}
+h3 {
+  font-size: 13px;
+  color: var(--accent);
+  margin: 22px 0 10px;
+}
+.note {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+.card {
+  border: 1px solid var(--line);
+  background: #15243a;
+  padding: 12px;
+  border-radius: 7px;
+  margin-bottom: 10px;
+}
+.card strong {
+  font-size: 21px;
+  color: var(--accent);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: normal;
+  background: #17263b;
+  position: sticky;
+  top: 0;
+}
+td,
+th {
+  padding: 9px 6px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+tr.selectable {
+  cursor: pointer;
+}
+tr.selected {
+  background: #1d4448;
+}
+label.field {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 5px;
+}
+label.field input,
+label.field select {
+  margin-top: 5px;
+  display: block;
+  width: 100%;
+}
+textarea {
+  width: 100%;
+  min-height: 110px;
+  line-height: 1.5;
+  font-family: monospace;
+}
+.row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+.row input {
+  max-width: 110px;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 11px;
+  line-height: 1.65;
+  background: #0c1726;
+  padding: 12px;
+  border-radius: 6px;
+}
+.pill {
+  display: inline-block;
+  font-size: 10px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: #22424a;
+  margin-right: 5px;
+}
+dialog {
+  width: min(820px, 94vw);
+  max-height: 85vh;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 23px;
+  overflow: auto;
+}
+dialog::backdrop {
+  background: #0009;
+}
+#selection {
+  flex: 1;
+  min-width: 60px;
+  color: var(--accent);
+}
+.badge {
+  color: var(--accent);
+}
+@media (max-width: 1150px) {
+  main {
+    grid-template-columns: 185px minmax(300px, 1fr) minmax(330px, 400px);
+  }
+  .actions button {
+    font-size: 12px;
+  }
+}
+@media (max-width: 850px) {
+  header {
+    height: auto;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
+  main {
+    display: flex;
+    flex-wrap: wrap;
+    height: auto;
+  }
+  aside {
+    width: 100%;
+    max-height: 160px;
+  }
+  .workspace {
+    width: 100%;
+    height: 650px;
+  }
+  .inspector {
+    width: 100%;
+    height: 650px;
+  }
+}

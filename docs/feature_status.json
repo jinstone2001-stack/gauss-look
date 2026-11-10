@@ -1,0 +1,1122 @@
+[
+  {
+    "id": "I01",
+    "priority": "P1",
+    "feature": "Gaussian 입력 읽기",
+    "status": "부분·조건부",
+    "data": "I",
+    "plan": "Cartesian/Z-matrix, 변수·추가 입력과 Link1을 읽는다. 알 수 없는 절은 원문으로 유지하고 왕복 저장을 검사한다."
+  },
+  {
+    "id": "I02",
+    "priority": "P1",
+    "feature": "로그·출력 읽기",
+    "status": "지원",
+    "data": "L",
+    "plan": "중도 종료·잘린 로그도 부분 결과를 연다. 출력 중인 마지막 미완성 레코드는 보류한다."
+  },
+  {
+    "id": "I03",
+    "priority": "P1",
+    "feature": "바이너리 checkpoint 열기",
+    "status": "지원",
+    "data": "K, U",
+    "plan": "호환 `formchk`를 작업 복사본에 실행한다. 반환 코드·출력 파일·필수 레코드를 모두 확인한다."
+  },
+  {
+    "id": "I04",
+    "priority": "P1",
+    "feature": "formatted checkpoint 열기",
+    "status": "지원",
+    "data": "F",
+    "plan": "레코드 길이, 자료형·배열 수, Fortran D 지수와 선택 레코드를 검사한다."
+  },
+  {
+    "id": "I05",
+    "priority": "P1",
+    "feature": "cube 열기",
+    "status": "지원",
+    "data": "C",
+    "plan": "다중 공간장·MO cube, 비직교 격자, 원점·축·단위를 해석한다. 데이터 수와 격자 크기를 대조한다."
+  },
+  {
+    "id": "I06",
+    "priority": "P2",
+    "feature": "Gaussian frequency 파일 열기",
+    "status": "후속 구현",
+    "data": "`.gfrq`",
+    "plan": "공식 예제·설치본 표본으로 형식을 검증한다. 일반 로그로 임의 해석하지 않는다."
+  },
+  {
+    "id": "I07",
+    "priority": "P3",
+    "feature": "PDB·AMBER PDB 읽기",
+    "status": "부분·조건부",
+    "data": "PDB",
+    "plan": "물 포함 여부, 잔기 결합 규칙·chain 정보를 옵션화한다. 누락 원자·다중 모델을 구별한다."
+  },
+  {
+    "id": "I08",
+    "priority": "P3",
+    "feature": "MOL·SDF·RXN 읽기",
+    "status": "부분·조건부",
+    "data": "구조 파일",
+    "plan": "다중 분자와 반응의 양쪽을 보존한다. 금속·비표준 원자가를 자동 수리해 원문을 바꾸지 않는다."
+  },
+  {
+    "id": "I09",
+    "priority": "P3",
+    "feature": "MOL2/ML2 읽기",
+    "status": "부분·조건부",
+    "data": "구조 파일",
+    "plan": "결합·atom type·전하·lone pair 변환 정책을 분리하고 변환 손실을 기록한다."
+  },
+  {
+    "id": "I10",
+    "priority": "P3",
+    "feature": "CIF 읽기",
+    "status": "부분·조건부",
+    "data": "결정 파일",
+    "plan": "격자·분율 좌표·공간군과 점유율을 보존한다. disorder는 명시적인 선택을 요구한다."
+  },
+  {
+    "id": "I11",
+    "priority": "P4",
+    "feature": "GMMX·AMPAC 계열 파일",
+    "status": "후속 구현",
+    "data": "선택 형식",
+    "plan": "표본과 형식 명세가 확보된 형식만 adapter로 지원한다. 이름만 인식한 상태와 완전 지원을 구별한다."
+  },
+  {
+    "id": "I12",
+    "priority": "P1",
+    "feature": "여러 작업 중 선택해 열기",
+    "status": "지원",
+    "data": "I, L",
+    "plan": "첫/마지막/선택/전체 작업을 지원한다. 선택하지 않은 계산도 원본에서 삭제하지 않는다."
+  },
+  {
+    "id": "I13",
+    "priority": "P1",
+    "feature": "중간 구조·결합 읽기 옵션",
+    "status": "부분·조건부",
+    "data": "L, F",
+    "plan": "최종만/전체, bond table/거리 추정, weak bond 정책을 분리한다. 경로 프레임을 빠뜨리지 않는다."
+  },
+  {
+    "id": "I14",
+    "priority": "P1",
+    "feature": "분자 그룹·연관 파일·새로고침",
+    "status": "부분·조건부",
+    "data": "파일 묶음",
+    "plan": "그룹 추가/교체/append, 최근 파일, 관련 파일, refresh를 제공한다. 새로고침 후 선택을 안정된 ID로 복구한다."
+  },
+  {
+    "id": "I15",
+    "priority": "P3",
+    "feature": "저장·일괄 형식 변환",
+    "status": "부분·조건부",
+    "data": "M, I",
+    "plan": "공식 변환 범위는 Gaussian/AMPAC 입력·MOL/SDF·GMMX·MOL2 등이다. 형식별 손실을 표시하고 무손실을 가정하지 않는다."
+  },
+  {
+    "id": "V01",
+    "priority": "P1",
+    "feature": "회전·이동·확대, 정밀 배향",
+    "status": "지원",
+    "data": "M",
+    "plan": "카메라 변환을 원자 좌표와 분리한다. 마우스 동작 중 원본 구조가 변하지 않아야 한다."
+  },
+  {
+    "id": "V02",
+    "priority": "P1",
+    "feature": "wire/tube/ball-and-stick/CPK",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "표시 반경과 실제 결합 길이를 구별한다. 두 GUI에서 같은 선택·색·크기 설정을 사용한다."
+  },
+  {
+    "id": "V03",
+    "priority": "P1",
+    "feature": "원소·번호·값 라벨",
+    "status": "부분·조건부",
+    "data": "M, 속성",
+    "plan": "원자번호는 원본 기준을 보존한다. 라벨 겹침·한글·고해상도 배율을 검사한다."
+  },
+  {
+    "id": "V04",
+    "priority": "P1",
+    "feature": "수소·dummy·결합 표시 제어",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "숨기기는 삭제와 분리한다. dummy center와 ghost atom을 같은 의미로 처리하지 않는다."
+  },
+  {
+    "id": "V05",
+    "priority": "P1",
+    "feature": "거리·각·이면각 조회",
+    "status": "지원",
+    "data": "M",
+    "plan": "원자 2/3/4개 선택과 수치 패널을 연결한다. 공선점·0 길이에서는 정의 불가를 표시한다."
+  },
+  {
+    "id": "V06",
+    "priority": "P1",
+    "feature": "여러 독립 view",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "같은 모델을 여러 카메라로 표시한다. 표시 설정과 구조 편집의 공유 범위를 구별한다."
+  },
+  {
+    "id": "V07",
+    "priority": "P2",
+    "feature": "molecule group multiview·동기화",
+    "status": "부분·조건부",
+    "data": "여러 M",
+    "plan": "바둑판·독립/동기 회전·크기·활성 모델 전환을 지원한다. 대량 view는 보이는 항목만 렌더링한다."
+  },
+  {
+    "id": "V08",
+    "priority": "P1",
+    "feature": "클릭·박스·brush 선택",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "보이는 면만/가려진 원자 포함 선택을 명시한다. 드래그 회전과 선택 동작을 충돌시키지 않는다."
+  },
+  {
+    "id": "V09",
+    "priority": "P2",
+    "feature": "조건·거리·연결성 기반 선택",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "원소/번호/MM/ONIOM 필터, 결합·주변 거리 확장, 전체·해제를 지원한다."
+  },
+  {
+    "id": "V10",
+    "priority": "P3",
+    "feature": "PDB 잔기·chain·secondary structure 선택",
+    "status": "후속 구현",
+    "data": "PDB",
+    "plan": "실제 잔기 메타데이터에 연결한다. 단순 XYZ에는 없는 정보를 만들어내지 않는다."
+  },
+  {
+    "id": "V11",
+    "priority": "P2",
+    "feature": "이름 있는 원자 그룹·선택 유지",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "그룹은 안정된 atom ID 집합으로 저장한다. 원자 삭제·재배열 후 dangling reference를 정리한다."
+  },
+  {
+    "id": "V12",
+    "priority": "P2",
+    "feature": "입체화학 R/S 표시",
+    "status": "후속 구현",
+    "data": "연결성 있는 M",
+    "plan": "bond order·동위원소·CIP 판정 조건을 검사한다. 불확실한 금속·결합성에는 미판정 상태를 허용한다."
+  },
+  {
+    "id": "V13",
+    "priority": "P2",
+    "feature": "fog·배경·축·원근·클리핑·품질",
+    "status": "부분·조건부",
+    "data": "M, Scene",
+    "plan": "depth와 Z-clip을 지원하고 속도·품질을 조정한다. 투명체 겹침과 그래픽 fallback을 검증한다."
+  },
+  {
+    "id": "V14",
+    "priority": "P1",
+    "feature": "강조·숨기기·중심맞춤·표시 색상",
+    "status": "부분·조건부",
+    "data": "M, Scene",
+    "plan": "선택·강조·숨김을 별도 상태로 관리한다. 원소색과 속성색 간 전환을 되돌릴 수 있게 한다."
+  },
+  {
+    "id": "B01",
+    "priority": "P3",
+    "feature": "원자·원소 템플릿 배치",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "원자가·결합 방향을 확인한다. 금속 착물은 유기분자 규칙을 강제로 적용하지 않는다."
+  },
+  {
+    "id": "B02",
+    "priority": "P3",
+    "feature": "ring·functional-group 라이브러리",
+    "status": "후속 구현",
+    "data": "fragment",
+    "plan": "부착 원자·제거 원자·방향을 메타데이터로 보관한다. fragment 저작물은 자체 제작/허용 자료를 사용한다."
+  },
+  {
+    "id": "B03",
+    "priority": "P3",
+    "feature": "아미노산·nucleoside 템플릿",
+    "status": "후속 구현",
+    "data": "fragment",
+    "plan": "말단·중간 형태와 연결 위치를 구별하고 입체화학을 유지한다."
+  },
+  {
+    "id": "B04",
+    "priority": "P3",
+    "feature": "사용자 fragment 라이브러리",
+    "status": "후속 구현",
+    "data": "fragment",
+    "plan": "가져오기·추가·분류·검색·삭제를 제공한다. 구조 형식·버전과 부착점 유효성을 검사한다."
+  },
+  {
+    "id": "B05",
+    "priority": "P3",
+    "feature": "fragment 결합·배치 방식",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "교체/부착·방향·자동 수소·부분 clean 정책을 분리하고 충돌을 사전 확인한다."
+  },
+  {
+    "id": "B06",
+    "priority": "P3",
+    "feature": "fragment를 선택 원자 centroid에 배치",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "기하학적 중심을 사용한다. 질량중심과 선택 옵션을 혼동하지 않는다."
+  },
+  {
+    "id": "B07",
+    "priority": "P3",
+    "feature": "수소·valence 추가·삭제",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "전체/선택 적용, 전하·결합차수와 원자가를 대조한다. 원자 ID와 그룹을 갱신한다."
+  },
+  {
+    "id": "B08",
+    "priority": "P3",
+    "feature": "결합차수·길이 편집·SmartSlide",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "이동할 연결 성분·고리의 자유도를 판정한다. 고리를 끊지 않고 요청 길이를 만족할 수 있는지 검사한다."
+  },
+  {
+    "id": "B09",
+    "priority": "P3",
+    "feature": "결합각 편집·SmartSlide",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "고정할 원자·이동 부분을 명시하고 과도한 변형을 확인한다."
+  },
+  {
+    "id": "B10",
+    "priority": "P3",
+    "feature": "이면각·Newman projection 편집",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "회전축·회전 부분·주기성을 정의한다. 고리 결합은 별도 제약 해법을 사용한다."
+  },
+  {
+    "id": "B11",
+    "priority": "P3",
+    "feature": "분자 전체 mirror invert",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "반전 전후 chirality를 대조하고 원본을 보존한다."
+  },
+  {
+    "id": "B12",
+    "priority": "P3",
+    "feature": "선택 원자 중심 반전",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "해당 중심의 연결 치환기를 다룬다. 원자가·인접 구조·입체화학을 검증한다."
+  },
+  {
+    "id": "B13",
+    "priority": "P3",
+    "feature": "Clean 구조 정리",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "기하 규칙 또는 선택 힘장으로 정리하되 Gaussian 최적화와 구별한다. 실패한 금속 파라미터를 숨기지 않는다."
+  },
+  {
+    "id": "B14",
+    "priority": "P3",
+    "feature": "Rebond·weak bond 제거·사용자 길이",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "거리 기반 표시 결합을 재구성한다. 전자구조 bond order와 별도 자료로 저장한다."
+  },
+  {
+    "id": "B15",
+    "priority": "P3",
+    "feature": "점군 판정·대칭 증가/감소·제약",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "좌표·원소·동위원소와 허용오차를 사용한다. 구조 투영 전후 RMSD를 보여준다."
+  },
+  {
+    "id": "B16",
+    "priority": "P3",
+    "feature": "원자표·Cartesian/Z-matrix 편집",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "수치 유효성·단위·변수 의존성·원자 재번호를 관리한다. 원자 재배열 시 모든 참조를 갱신한다."
+  },
+  {
+    "id": "B17",
+    "priority": "P3",
+    "feature": "Z-matrix 표준화·구조 재배향",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "표현 변환과 실제 구조 변경을 구별한다. 거리 행렬 불변성을 확인한다."
+  },
+  {
+    "id": "B18",
+    "priority": "P3",
+    "feature": "동위원소·여러 isotopologue 정의",
+    "status": "부분·조건부",
+    "data": "M",
+    "plan": "질량과 원소번호를 분리한다. 진동 재계산 전까지 기존 모드와 분리해 표시한다."
+  },
+  {
+    "id": "B19",
+    "priority": "P3",
+    "feature": "MM atom type·전하·ONIOM layer 편집",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "원자 속성·link atom·embedding·고정 블록 정보를 유지한다. 방법별 총전하·다중도를 검사한다."
+  },
+  {
+    "id": "B20",
+    "priority": "P3",
+    "feature": "PDB 잔기·chain·구조 메타데이터 편집",
+    "status": "후속 구현",
+    "data": "PDB",
+    "plan": "메타데이터 수정과 좌표 수정을 구별한다. 내보낼 형식이 보존 가능한 항목을 표시한다."
+  },
+  {
+    "id": "B21",
+    "priority": "P3",
+    "feature": "Redundant Coordinate Editor",
+    "status": "후속 구현",
+    "data": "M",
+    "plan": "bond/angle/dihedral 생성·freeze·scan 조건을 입력으로 직렬화한다. Gaussian 원자번호와 일치시킨다."
+  },
+  {
+    "id": "B22",
+    "priority": "P3",
+    "feature": "Connection Editor·QST 원자 대응",
+    "status": "후속 구현",
+    "data": "여러 M",
+    "plan": "원소·원자수와 대응표를 검증한다. symmetry 때문에 모호한 매칭은 사용자가 확인한다."
+  },
+  {
+    "id": "B23",
+    "priority": "P3",
+    "feature": "PBC Crystal Editor",
+    "status": "부분·조건부",
+    "data": "cell, M",
+    "plan": "1D/2D/3D 주기·공간군·격자·분율 좌표·cell 변환을 지원한다. 분자용 결합 추정과 분리한다."
+  },
+  {
+    "id": "J01",
+    "priority": "P3",
+    "feature": "작업 유형 선택",
+    "status": "부분·조건부",
+    "data": "M, 설정",
+    "plan": "Energy/Opt/Freq/Opt+Freq/IRC/Scan/Stability/NMR와 custom job을 구별한다. 키워드 간 모순을 검사한다."
+  },
+  {
+    "id": "J02",
+    "priority": "P3",
+    "feature": "method·basis·R/U/RO·전하·다중도",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "전자수·spin parity, 원소별 basis/ECP 지원을 확인한다. 사용자 정의 method/basis를 보존한다."
+  },
+  {
+    "id": "J03",
+    "priority": "P3",
+    "feature": "바닥/여기 상태·분산 설정",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "root·상태 수·함수·분산 조합을 기록한다. 기본값에 의존한 실제 조건도 결과에서 확인한다."
+  },
+  {
+    "id": "J04",
+    "priority": "P3",
+    "feature": "Title·Link 0 설정",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "mem/nprocshared/chk/oldchk/rwf/Linda 등과 자원 요청을 연결한다. 단위와 파일 덮어쓰기를 검사한다."
+  },
+  {
+    "id": "J05",
+    "priority": "P3",
+    "feature": "일반 계산 옵션",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "SCF·symmetry·connectivity·출력 상세도·디스크·Polar·OptRot·CPHF 등을 형식별로 생성한다."
+  },
+  {
+    "id": "J06",
+    "priority": "P3",
+    "feature": "checkpoint 데이터 재사용",
+    "status": "부분·조건부",
+    "data": "K/F, 설정",
+    "plan": "Geom=Check/AllCheck, Guess=Read, force constants를 구별한다. 상태·basis·원자수 호환성을 확인한다."
+  },
+  {
+    "id": "J07",
+    "priority": "P3",
+    "feature": "초기 guess·mix·localize·fragment",
+    "status": "후속 구현",
+    "data": "설정",
+    "plan": "guess only/read/fallback/localization·fragment spin을 구별한다. 실행 결과가 추정 MO인지 수렴 MO인지 표시한다."
+  },
+  {
+    "id": "J08",
+    "priority": "P3",
+    "feature": "population·전하·density 옵션",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "Mulliken/MK/Hirshfeld-CM5/MBS·density source·매 단계 출력을 지원한다. NTO를 전하 분석으로 분류하지 않는다."
+  },
+  {
+    "id": "J09",
+    "priority": "P3",
+    "feature": "NBO/NPA·NLMO/NTO 저장 옵션",
+    "status": "후속 구현",
+    "data": "설정, 외부 NBO",
+    "plan": "기본/외부 NBO 버전 지원을 구별한다. canonical MO가 덮어써질 수 있어 별도 checkpoint를 사용한다."
+  },
+  {
+    "id": "J10",
+    "priority": "P3",
+    "feature": "SCRF 용매·모델·추가 입력",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "PCM/SMD 등 모델과 용매를 직렬화한다. 모델별 필수 추가 입력·유효 반경을 확인한다."
+  },
+  {
+    "id": "J11",
+    "priority": "P3",
+    "feature": "PBC 계산 옵션",
+    "status": "후속 구현",
+    "data": "cell, 설정",
+    "plan": "translation vector·k점 옵션·분율/Cartesian 변환을 검사한다. 셀 없는 분자에 적용하지 않는다."
+  },
+  {
+    "id": "J12",
+    "priority": "P3",
+    "feature": "자유 키워드·추가 절·preview",
+    "status": "부분·조건부",
+    "data": "I",
+    "plan": "원문 보존·편집·미리보기와 선택적 `testrt` 검증을 제공한다. 통과가 화학적 타당성을 보장하지는 않는다."
+  },
+  {
+    "id": "J13",
+    "priority": "P3",
+    "feature": "QST2/QST3 TS 설정",
+    "status": "후속 구현",
+    "data": "대응된 M",
+    "plan": "반응물/생성물/TS 추정 구조의 atom mapping·전하·spin·번호를 일치시킨다."
+  },
+  {
+    "id": "J14",
+    "priority": "P3",
+    "feature": "ONIOM 다층 설정",
+    "status": "후속 구현",
+    "data": "M, layer",
+    "plan": "각 층 방법·MM·link atom·전하·다중도·고정 블록을 검증한다. 유기 단일층 규칙을 그대로 쓰지 않는다."
+  },
+  {
+    "id": "J15",
+    "priority": "P3",
+    "feature": "CASSCF active space·MO 순열",
+    "status": "후속 구현",
+    "data": "MO, 설정",
+    "plan": "active 전자/오비탈 수·spin과 순열을 검증한다. MO 편집은 다음 계산의 입력이며 기존 결과 수정이 아니다."
+  },
+  {
+    "id": "J16",
+    "priority": "P3",
+    "feature": "freeze·부분 모드·rigid/relaxed scan",
+    "status": "부분·조건부",
+    "data": "M, 설정",
+    "plan": "좌표 제약과 scan 축·점 수·간격을 정의한다. 실제 자유도와 출력 경로를 대응시킨다."
+  },
+  {
+    "id": "J17",
+    "priority": "P3",
+    "feature": "NMR spin-spin coupling 설정",
+    "status": "부분·조건부",
+    "data": "M, 설정",
+    "plan": "coupling 요청과 shielding만 요청한 경우를 구별한다. tensor 출력 형식을 표본 검증한다."
+  },
+  {
+    "id": "J18",
+    "priority": "P3",
+    "feature": "fragment guess·counterpoise 설정",
+    "status": "부분·조건부",
+    "data": "M, fragments",
+    "plan": "fragment별 전하·spin·ghost basis·전체 조합을 검사한다. 보정 전후 에너지 정의를 분리한다."
+  },
+  {
+    "id": "J19",
+    "priority": "P3",
+    "feature": "이름 있는 calculation scheme",
+    "status": "부분·조건부",
+    "data": "설정",
+    "plan": "저장·분류·적용·내보내기와 조건 추적을 제공한다. 외부 키워드를 잃지 않고 병합한다."
+  },
+  {
+    "id": "J20",
+    "priority": "P3",
+    "feature": "분자 그룹 일괄 입력·실행",
+    "status": "부분·조건부",
+    "data": "여러 M",
+    "plan": "고유 이름·checkpoint·출력 경로를 배정한다. 같은 이름의 chk를 공유하지 않는다."
+  },
+  {
+    "id": "J21",
+    "priority": "P3",
+    "feature": "로컬 제출·Quick Launch",
+    "status": "후속 구현",
+    "data": "I, g16",
+    "plan": "임시 디렉터리·환경·진행 상태와 반환 코드를 관리한다. GUI 종료와 작업 생명주기를 분리한다."
+  },
+  {
+    "id": "J22",
+    "priority": "P3",
+    "feature": "Current Jobs·utility 작업 제어",
+    "status": "부분·조건부",
+    "data": "실행 task",
+    "plan": "Gaussian/cubegen/freqchk 진행·오류·취소를 표시한다. 취소 대상을 task ID로 제한한다."
+  },
+  {
+    "id": "J23",
+    "priority": "P3",
+    "feature": "SC Job Manager 형태의 로컬 큐",
+    "status": "후속 구현",
+    "data": "작업 목록",
+    "plan": "short/long queue·동시 실행·완료/실패·작업 유형 템플릿을 관리한다. 재시작 후 상태를 복구한다."
+  },
+  {
+    "id": "J24",
+    "priority": "P3",
+    "feature": "원격 script 실행·로그 stream",
+    "status": "후속 구현",
+    "data": "scheduler, L",
+    "plan": "SSH와 SLURM/PBS adapter로 제출·조회한다. 클러스터에서는 로그인 노드 직접 계산을 기본 경로로 삼지 않는다."
+  },
+  {
+    "id": "R01",
+    "priority": "P1",
+    "feature": "계산 개요·조건·구조 정보",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "method/basis·용매·전하·spin·점군을 선택 작업에 연결한다. 파일 내 마지막 값만 일괄 채택하지 않는다."
+  },
+  {
+    "id": "R02",
+    "priority": "P1",
+    "feature": "total energy 표시",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "방법에 맞는 SCF/MP/CC/ONIOM/복합법/여기 상태 에너지를 선택한다. 전자 에너지와 열보정 포함 값을 구분한다."
+  },
+  {
+    "id": "R03",
+    "priority": "P1",
+    "feature": "쌍극자 크기·벡터",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "단위·좌표계를 맞추고 화살표의 길이·원점을 조절한다. 하전계의 원점 의존성을 명시한다."
+  },
+  {
+    "id": "R04",
+    "priority": "P2",
+    "feature": "분극률 등 분자 물성 요약",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "tensor·평균값·static/dynamic·주파수와 단위를 보존한다. 분자 분극률을 고체 유전율로 표기하지 않는다."
+  },
+  {
+    "id": "R05",
+    "priority": "P1",
+    "feature": "최적화 수렴 요약",
+    "status": "지원",
+    "data": "L",
+    "plan": "max/RMS force와 displacement, threshold·예측 에너지 변화를 보여준다. 전체 수렴은 Gaussian 판정과 함께 표시한다."
+  },
+  {
+    "id": "R06",
+    "priority": "P1",
+    "feature": "Thermo 요약",
+    "status": "지원",
+    "data": "L/F, 진동 분석",
+    "plan": "ZPE·thermal E/H/G·S·T/P를 구별한다. correction과 sum을 중복 합산하지 않는다."
+  },
+  {
+    "id": "R07",
+    "priority": "P1",
+    "feature": "imaginary frequency 수 표시",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "계산된 진동수와 원시 값을 표시한다. 누락된 frequency를 0개의 허수 모드로 처리하지 않는다."
+  },
+  {
+    "id": "R08",
+    "priority": "P1",
+    "feature": "Molecule Group Table",
+    "status": "지원",
+    "data": "여러 계산",
+    "plan": "선택한 결과·속성의 정렬·비교·표 편집을 제공한다. 에너지 종류·단위·방법을 열에 함께 표시한다."
+  },
+  {
+    "id": "R09",
+    "priority": "P1",
+    "feature": "원자 물성·전하의 숫자/색 표시",
+    "status": "지원",
+    "data": "L/F",
+    "plan": "존재하는 Mulliken·ESP·NPA·Hirshfeld/CM5 등만 활성화한다. 고정/대칭 color range를 지원한다."
+  },
+  {
+    "id": "R10",
+    "priority": "P2",
+    "feature": "결합 길이·bond order의 숫자/색 표시",
+    "status": "부분·조건부",
+    "data": "M, L/F",
+    "plan": "좌표로 얻은 길이와 출력된 결합차수를 구분한다. 표시용 연결성의 single/double을 양자화학 결합차수로 오인하지 않게 한다."
+  },
+  {
+    "id": "T01",
+    "priority": "P1",
+    "feature": "Optimization 에너지·gradient plot",
+    "status": "지원",
+    "data": "L",
+    "plan": "최적화 step과 내부 SCF iteration을 분리한다. 선택 점을 해당 좌표와 연결한다."
+  },
+  {
+    "id": "T02",
+    "priority": "P1",
+    "feature": "IRC plot·구조 보기",
+    "status": "부분·조건부",
+    "data": "L, 경로 데이터",
+    "plan": "forward/reverse·반응좌표·에너지·구조를 분리해 읽고 공통 TS를 중복 처리하지 않는다."
+  },
+  {
+    "id": "T03",
+    "priority": "P1",
+    "feature": "1변수 PES scan",
+    "status": "부분·조건부",
+    "data": "L, scan 설정",
+    "plan": "rigid/relaxed를 구별하고 각 점의 내부 최적화 최종값을 연결한다. 실패한 점은 빈 값으로 남긴다."
+  },
+  {
+    "id": "T04",
+    "priority": "P2",
+    "feature": "2변수 scan 3D surface",
+    "status": "부분·조건부",
+    "data": "L, 두 좌표",
+    "plan": "축 단위·순서·반복점을 검사한다. 미계산 영역은 보간 결과로 명확히 표시한다."
+  },
+  {
+    "id": "T05",
+    "priority": "P2",
+    "feature": "BOMD·ADMP·trajectory plot",
+    "status": "부분·조건부",
+    "data": "L/trajectory",
+    "plan": "실제 time step·온도·에너지와 구조를 동기화한다. 재시작 시 시간·프레임 중복을 정리한다."
+  },
+  {
+    "id": "T06",
+    "priority": "P2",
+    "feature": "conformer energy plot",
+    "status": "부분·조건부",
+    "data": "conformer 집합",
+    "plan": "상대 에너지 기준·단위·동일 방법을 표시한다. GMMX 결과 읽기와 검색 실행을 분리한다."
+  },
+  {
+    "id": "T07",
+    "priority": "P1",
+    "feature": "구조 연속 재생·속성 추가 plot",
+    "status": "지원",
+    "data": "frame 집합",
+    "plan": "forward/reverse/loop·재생 간격과 거리·각·물성 시계열을 연결한다. 저장 프레임 사이 보간은 표시용임을 명시한다."
+  },
+  {
+    "id": "O01",
+    "priority": "P1",
+    "feature": "MO 에너지·점유 diagram",
+    "status": "부분·조건부",
+    "data": "L/F",
+    "plan": "HOMO/LUMO·점유·대칭·degeneracy threshold와 energy/occupancy 순서를 표시한다. 0/1 기반 번호를 구별한다."
+  },
+  {
+    "id": "O02",
+    "priority": "P1",
+    "feature": "특정 MO·여러 MO 등치면",
+    "status": "지원",
+    "data": "F, U 또는 C",
+    "plan": "선택 오비탈의 ψ를 공간장으로 만든다. ±위상과 같은 등치값·격자로 비교한다."
+  },
+  {
+    "id": "O03",
+    "priority": "P1",
+    "feature": "alpha/beta 오비탈 구별",
+    "status": "지원",
+    "data": "open-shell F/C",
+    "plan": "spin 채널별 MO 수·에너지·점유를 읽는다. open-shell의 frontier를 단일 쌍으로 축약하지 않는다."
+  },
+  {
+    "id": "O04",
+    "priority": "P3",
+    "feature": "MO 점유·charge/spin·순열 편집",
+    "status": "후속 구현",
+    "data": "MO 집합",
+    "plan": "다음 Gaussian 작업용 설정으로 저장한다. 기존 파동함수의 결과와 섞지 않고 Aufbau/원본 복원을 제공한다."
+  },
+  {
+    "id": "O05",
+    "priority": "P3",
+    "feature": "기존 MO 불러오기·guess-only 생성",
+    "status": "후속 구현",
+    "data": "K/F, Gaussian",
+    "plan": "추정 MO 생성·localization 조건을 기록한다. 수렴된 SCF 결과와 시각적으로 구별한다."
+  },
+  {
+    "id": "O06",
+    "priority": "P2",
+    "feature": "저장된 NBO·NLMO·NTO 등 보기",
+    "status": "부분·조건부",
+    "data": "적합한 F/C",
+    "plan": "오비탈 종류·상태·점유/가중치 출처를 붙인다. canonical MO로 오표기하지 않는다."
+  },
+  {
+    "id": "O07",
+    "priority": "P1",
+    "feature": "total/alpha/beta electron density",
+    "status": "지원",
+    "data": "F, U 또는 C",
+    "plan": "SCF/상관 밀도·full/frozen core 가용성을 검사한다. 수치 적분을 해당 전자수 정의와 비교한다."
+  },
+  {
+    "id": "O08",
+    "priority": "P1",
+    "feature": "electrostatic potential",
+    "status": "지원",
+    "data": "F, U 또는 C",
+    "plan": "핵·전자 기여와 밀도 종류를 확인한다. 전하 점근사와 파동함수 ESP를 구별한다."
+  },
+  {
+    "id": "O09",
+    "priority": "P2",
+    "feature": "spin density",
+    "status": "지원",
+    "data": "F, U 또는 C",
+    "plan": "alpha-beta 밀도를 사용한다. 총밀도와 구별하고 부호·전자수 차 적분을 확인한다."
+  },
+  {
+    "id": "O10",
+    "priority": "P2",
+    "feature": "NMR shielding·자기 관련 공간장",
+    "status": "부분·조건부",
+    "data": "해당 응답 데이터, U/C",
+    "plan": "성분·외부장 방향·대상 핵과 필요한 응답 결과를 확인한다. NMR isotropic 값 하나로 공간장을 만들지 않는다."
+  },
+  {
+    "id": "O11",
+    "priority": "P1",
+    "feature": "cube 생성·load/save/remove·격자",
+    "status": "지원",
+    "data": "F/C, U",
+    "plan": "범위·원점·해상도·메모리 추정과 비동기 생성·취소·캐시를 제공한다. 외부 파일 삭제와 화면 제거를 구별한다."
+  },
+  {
+    "id": "O12",
+    "priority": "P2",
+    "feature": "cube scale/square/add/subtract",
+    "status": "지원",
+    "data": "C",
+    "plan": "같은 구조·좌표계·격자를 우선 요구한다. 재격자가 필요하면 보간법·오차를 기록한다."
+  },
+  {
+    "id": "O13",
+    "priority": "P1",
+    "feature": "solid/transparent/mesh·±surface",
+    "status": "지원",
+    "data": "C",
+    "plan": "marching cubes 등으로 mesh를 만들고 등치값·부호·가림·Z-clip을 조절한다. 값 범위 밖 등치값을 설명한다."
+  },
+  {
+    "id": "O14",
+    "priority": "P1",
+    "feature": "다른 물성으로 surface 색칠",
+    "status": "부분·조건부",
+    "data": "두 공간장",
+    "plan": "density 표면 위 ESP 등 mesh vertex에서 두 번째 장을 샘플링한다. 좌표·단위·색상 범위를 고정해 비교한다."
+  },
+  {
+    "id": "O15",
+    "priority": "P2",
+    "feature": "2D contour·평면 정의·이동",
+    "status": "부분·조건부",
+    "data": "C",
+    "plan": "3점/원점+법선으로 평면을 정의하고 보간한다. 공선 3점·범위 밖 평면을 검사한다."
+  },
+  {
+    "id": "O16",
+    "priority": "P2",
+    "feature": "PCM solvation cavity",
+    "status": "후속 구현",
+    "data": "PrintSpheres 등 출력",
+    "plan": "공식 매뉴얼의 SCRF=Read 추가 입력 PrintSpheres 자료를 읽는다. 일반 vdW 표면으로 대체해 PCM이라 부르지 않는다."
+  },
+  {
+    "id": "S01",
+    "priority": "P1",
+    "feature": "진동수·모드 선택·애니메이션",
+    "status": "지원",
+    "data": "L/F의 모드",
+    "plan": "Cartesian 변위와 질량가중 모드를 구별한다. 주기·진폭·재생 속도를 실제 동역학 시간과 구별한다."
+  },
+  {
+    "id": "S02",
+    "priority": "P1",
+    "feature": "변위·dipole derivative 벡터",
+    "status": "부분·조건부",
+    "data": "모드, 해당 미분량",
+    "plan": "좌표 변환 시 벡터도 함께 회전한다. IR intensity만으로 dipole derivative 방향을 복원하지 않는다."
+  },
+  {
+    "id": "S03",
+    "priority": "P1",
+    "feature": "모드 방향 수동 변위·구조 저장",
+    "status": "지원",
+    "data": "구조+모드",
+    "plan": "±진폭 좌표를 새 구조로 생성한다. 허수 모드 변위가 반응 경로를 증명하지는 않는다."
+  },
+  {
+    "id": "S04",
+    "priority": "P1",
+    "feature": "주파수 scale factor",
+    "status": "지원",
+    "data": "진동수+설정",
+    "plan": "원래 값과 표시용 값을 보관한다. 열화학 재계산 scale과 plot scale을 분리한다."
+  },
+  {
+    "id": "S05",
+    "priority": "P1",
+    "feature": "IR 스펙트럼",
+    "status": "지원",
+    "data": "ν, IR intensity",
+    "plan": "stick와 Gaussian/Lorentz broadening을 제공한다. 단위·FWHM/HWHM·정규화 규칙을 명시한다."
+  },
+  {
+    "id": "S06",
+    "priority": "P1",
+    "feature": "Raman 스펙트럼",
+    "status": "지원",
+    "data": "ν, Raman activity",
+    "plan": "activity와 intensity를 구별한다. 레이저·온도·편광 조건을 적용하고 계산 근거를 저장한다."
+  },
+  {
+    "id": "S07",
+    "priority": "P2",
+    "feature": "VCD 스펙트럼",
+    "status": "부분·조건부",
+    "data": "ν, 회전강도",
+    "plan": "부호와 단위·선폭을 보존한다. enantiomer 변환의 부호 관계로 확인한다."
+  },
+  {
+    "id": "S08",
+    "priority": "P2",
+    "feature": "ROA 스펙트럼",
+    "status": "후속 구현",
+    "data": "ROA 응답 결과",
+    "plan": "산란 기하·레이저 주파수·단위·편광 조건을 선택한다. Raman activity만으로 생성하지 않는다."
+  },
+  {
+    "id": "S09",
+    "priority": "P2",
+    "feature": "주파수 의존 결과 선택",
+    "status": "부분·조건부",
+    "data": "여러 응답 주파수",
+    "plan": "계산된 incident frequency별 데이터를 연결한다. 계산하지 않은 주파수는 재계산 필요로 표시한다."
+  },
+  {
+    "id": "S10",
+    "priority": "P2",
+    "feature": "isotope 치환 후 모드·스펙트럼 비교",
+    "status": "부분·조건부",
+    "data": "Hessian, 질량",
+    "plan": "freqchk 또는 검증된 질량가중 Hessian 해법으로 재분석한다. 기존 모드 번호가 그대로 대응한다고 가정하지 않는다."
+  },
+  {
+    "id": "S11",
+    "priority": "P2",
+    "feature": "FreqChk·모드 선택/저장",
+    "status": "부분·조건부",
+    "data": "K/F, U",
+    "plan": "미분량·온도·압력·scale·선택 모드를 명시적으로 전달하고 구버전 기본 scale에 의존하지 않는다. chk 쓰기는 복사본에서만 수행한다."
+  },
+  {
+    "id": "S12",
+    "priority": "P2",
+    "feature": "비조화·overtone·combination 표시",
+    "status": "후속 구현",
+    "data": "anharmonic 출력",
+    "plan": "harmonic·fundamental·overtone·조합 피크를 분리한다. harmonic 주파수 배율만으로 비조화 결과를 만들지 않는다."
+  },
+  {
+    "id": "S13",
+    "priority": "P1",
+    "feature": "NMR shielding·기준물질 chemical shift",
+    "status": "부분·조건부",
+    "data": "NMR 출력, reference",
+    "plan": "핵종별 shielding·δ와 기준 계산 조건을 보존한다. degeneracy tolerance·선폭·summary export를 제공한다."
+  },
+  {
+    "id": "S14",
+    "priority": "P1",
+    "feature": "UV-Vis 스펙트럼·전이",
+    "status": "지원",
+    "data": "여기 상태 에너지·f",
+    "plan": "eV/nm/cm-1 변환과 선폭·전이 목록을 연결한다. oscillator strength 없이 정량 흡광도를 주장하지 않는다."
+  },
+  {
+    "id": "S15",
+    "priority": "P2",
+    "feature": "ECD 스펙트럼",
+    "status": "지원",
+    "data": "전자전이 회전강도",
+    "plan": "length/velocity gauge 등 출처와 부호를 보존한다. UV oscillator strength로 대신 계산하지 않는다."
+  },
+  {
+    "id": "S16",
+    "priority": "P2",
+    "feature": "ORD plot",
+    "status": "후속 구현",
+    "data": "파장별 optical rotation",
+    "plan": "계산된 파장·specific/molar rotation 정의와 용매 조건을 표시한다. 파장 0 또는 공명 부근 보간을 검사한다."
+  },
+  {
+    "id": "S17",
+    "priority": "P2",
+    "feature": "Vibronic OPA·Duschinsky·전이표",
+    "status": "후속 구현",
+    "data": "vibronic 결과",
+    "plan": "초기/최종 상태·모드 매핑·온도와 행렬·보고된 전이를 읽는다. TD 전이 목록만으로 재구성하지 않는다."
+  },
+  {
+    "id": "S18",
+    "priority": "P2",
+    "feature": "Mixture Editor·conformer 평균",
+    "status": "부분·조건부",
+    "data": "여러 스펙트럼, 가중치",
+    "plan": "수동 비율·Boltzmann 평균을 지원한다. 에너지/자유에너지·T·degeneracy와 스펙트럼 단위를 일치시킨다."
+  },
+  {
+    "id": "S19",
+    "priority": "P1",
+    "feature": "plot 겹치기·축·선·피크·라벨 편집",
+    "status": "부분·조건부",
+    "data": "Spectrum/plot",
+    "plan": "확대·반전·범위·선폭·색·폰트·sticks/curve를 지원한다. 원시 데이터는 표시 편집과 분리한다."
+  },
+  {
+    "id": "P01",
+    "priority": "P1",
+    "feature": "plot·스펙트럼 수치 데이터 내보내기",
+    "status": "지원",
+    "data": "원시/가공 배열",
+    "plan": "stick·곡선·미분·NMR summary, 범위·격자 간격을 구별한다. 열 이름·단위·설정을 함께 저장한다."
+  },
+  {
+    "id": "P02",
+    "priority": "P1",
+    "feature": "구조·plot 이미지 저장",
+    "status": "부분·조건부",
+    "data": "Scene",
+    "plan": "PNG/JPEG/TIFF/EPS 등 공식 대응 형식의 특성을 구분한다. 벡터 plot과 raster 3D 이미지의 차이를 알린다."
+  },
+  {
+    "id": "P03",
+    "priority": "P2",
+    "feature": "임의 크기·해상도·그룹 이미지",
+    "status": "부분·조건부",
+    "data": "Scene 집합",
+    "plan": "배경·흑백/색상·batch 이름·해상도·카메라를 고정한다. 라벨과 색상막대가 잘리지 않아야 한다."
+  },
+  {
+    "id": "P04",
+    "priority": "P1",
+    "feature": "진동·구조 movie와 frame 저장",
+    "status": "부분·조건부",
+    "data": "animation",
+    "plan": "MP4/GIF/MNG 계열·개별 프레임의 지원을 명시한다. 프레임 수·방향·반복·끝점 지연을 설정한다."
+  },
+  {
+    "id": "P05",
+    "priority": "P2",
+    "feature": "인쇄·clipboard image capture",
+    "status": "부분·조건부",
+    "data": "Scene/plot",
+    "plan": "OS 의존 기능은 desktop에서 제공한다. 웹은 다운로드·인쇄와 대응 기능으로 제공한다."
+  },
+  {
+    "id": "P06",
+    "priority": "P1",
+    "feature": "폰트·색·크기·창·디렉터리 설정",
+    "status": "부분·조건부",
+    "data": "preferences",
+    "plan": "한글/영문 fallback·DPI·아이콘·파일 연결을 관리한다. 브라우저와 서버 파일 경로를 혼동하지 않는다."
+  },
+  {
+    "id": "P07",
+    "priority": "P3",
+    "feature": "toolbar 구성·빠른 실행 배치",
+    "status": "후속 구현",
+    "data": "preferences",
+    "plan": "action ID에 단축키·도구막대를 연결한다. 동일 action이 메뉴와 다른 결과를 내지 않게 한다."
+  },
+  {
+    "id": "P08",
+    "priority": "P2",
+    "feature": "그림·movie·진동·결합·clean 기본값",
+    "status": "부분·조건부",
+    "data": "preferences",
+    "plan": "사용자 기본값과 프로젝트 값을 구별하고 초기화·schema migration을 제공한다."
+  },
+  {
+    "id": "P09",
+    "priority": "P2",
+    "feature": "창·view·그룹 관리",
+    "status": "부분·조건부",
+    "data": "view 상태",
+    "plan": "닫기/숨기기/복원·tile/cascade·이전/다음·활성 그룹을 제공한다. 웹은 tab/dock/grid로 대응한다."
+  },
+  {
+    "id": "P10",
+    "priority": "P1",
+    "feature": "도움말·문맥 도움·tips·버전 정보",
+    "status": "지원",
+    "data": "자체 도움말",
+    "plan": "공식 개념에 링크하고 자체 UI 도움말을 작성한다. 네트워크 없이 기본 설명·지원 버전을 볼 수 있게 한다."
+  },
+  {
+    "id": "A01",
+    "priority": "P4",
+    "feature": "GMMX conformer search 연동",
+    "status": "후속 구현",
+    "data": "별도 GMMX",
+    "plan": "force field·energy window·탐색 설정, 결과 읽기·후속 계산을 연결한다. RDKit/CREST 대안은 GMMX와 다른 검색기로 표시한다."
+  },
+  {
+    "id": "A02",
+    "priority": "P4",
+    "feature": "AMPAC interface 연동",
+    "status": "후속 구현",
+    "data": "별도 AMPAC",
+    "plan": "실행 환경·입출력 형식·버전이 확보될 때 adapter를 작성한다. 기본 배포에서 필수 의존성으로 삼지 않는다."
+  }
+]
