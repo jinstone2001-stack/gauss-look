@@ -1,4 +1,16 @@
-# GaussLook 1.1 검증 기록
+# GaussLook 검증 기록
+
+## 1.2 검증 — 2026-11-11
+
+- Windows / Python 3.12.14: **65 passed**. 기존 분석·parser·utility adapter 시험과 새 폴더/API·Gaussian 입력·실제 Tk 화면 시험을 포함합니다. NumPy 2.5 / scikit-image 내부의 deprecation warning이 남아 있으며, 전체 통합 실행에서는 Tk Variable의 종료 시점 GC 관련 경고도 1회 관찰했습니다.
+- 실제 Tk 8.6.12 win32: 한국어↔영어, 도움말 언어 변경, Dark/Light와 사용자 배경색, 설정 저장, 숫자/음수/빈 값 정렬, 정렬 후 원래 모드·frame 선택, 한글·공백 경로 붙여넣기, `..`와 뒤로, 선택 frame의 Gaussian 입력 생성·Route override·저장 일치를 확인했습니다. 이 버전의 MobaXterm/X11 조합은 다시 실행하지 않았습니다.
+- 실제 Python 서버 + jsdom/모의 renderer: 기존 MO/진동/Force/분극률/표면/상태표에 더해 숫자 정렬·행 연결, 언어와 설정 저장, theme, 폴더 경로 Enter·상위 폴더, SMILES 입력 유지, 구조화 Gaussian 입력과 Link 0 미리보기를 확인했습니다. **DOM passed / errors []**. 모의 renderer 시험을 실제 GPU 렌더 시험으로 간주하지 않습니다.
+- 실제 Chrome: 내장 3Dmol.js의 물 분자 WebGL 표시, 한국어/영어 전환, Dark/Light와 Gaussian 설정·입력 미리보기 화면을 직접 확인했습니다. 숫자 정렬과 PNG 저장도 확인했습니다. 다운로드 완료 이벤트를 기다리는 도구는 시간 초과했지만 실제 생성된 PNG 파일을 별도로 열어 분자 렌더를 확인했습니다. 대형 분자 FPS 또는 모든 GPU·브라우저의 호환성을 측정한 시험은 아닙니다.
+- Python compileall과 두 웹 JavaScript 구문 검사를 수행했습니다. CI에는 Linux의 Xvfb/Tk 회귀시험도 추가했습니다.
+- `.glproj` 형식과 분석 단위·원문·계산 데이터의 저장 방식은 변경하지 않았습니다. 아래의 1.1 공개 Gaussian 출력 검증은 이전 버전의 근거입니다.
+- 실제 Gaussian `formchk/cubegen` 실행 파일이 없어 해당 도구와 새 Gaussian 계산은 검증하지 않았습니다. adapter의 성공·실패·원본 보존은 모의 실행 파일로 검증했습니다.
+
+## 1.1 검증 기록 (이전 버전)
 
 검증일: 2026-11-10. Python 3.12.14 / Linux / Tk 9.0 환경입니다.
 

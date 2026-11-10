@@ -13,7 +13,13 @@ jobs:
           python-version: '${{ matrix.python }}'
       - run: python -m pip install -r requirements.txt pytest
       - run: python -m compileall -q gausslook GaussLook.py
-      - run: python -m pytest -q
+      - run: python -m pytest -q --ignore=tests/test_native_ui_v12.py
+      - name: Install native UI test display
+        if: matrix.python == '3.12'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
+      - name: Native Tk UI regressions
+        if: matrix.python == '3.12'
+        run: xvfb-run -a python -m pytest -q tests/test_native_ui_v12.py
       - uses: actions/setup-node@v4
         if: matrix.python == '3.12'
         with:

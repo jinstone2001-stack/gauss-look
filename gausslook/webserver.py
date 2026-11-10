@@ -58,6 +58,8 @@ def make_server(engine, host="127.0.0.1", port=8888):
                     p = (engine.root / q.get("path", [""])[0]).resolve()
                     if not p.is_relative_to(engine.root):
                         raise ValueError("--root 바깥 경로에 접근할 수 없습니다.")
+                    if not p.is_dir():
+                        raise ValueError("폴더를 찾을 수 없습니다. / Directory not found.")
                     entries = []
                     for v in sorted(p.iterdir(), key=lambda v: (not v.is_dir(), v.name.lower())):
                         if v.name.startswith("."):
@@ -71,12 +73,19 @@ def make_server(engine, host="127.0.0.1", port=8888):
                             }
                         )
                     return self.send(
-                        {"path": str(p.relative_to(engine.root)), "entries": entries[:1000]}
+                        {
+                            "path": str(p.relative_to(engine.root)),
+                            "absolute_path": str(p),
+                            "root": str(engine.root),
+                            "parent": str(p.parent.relative_to(engine.root)) if p != engine.root else None,
+                            "entries": entries[:1000],
+                            "truncated": len(entries) > 1000,
+                        }
                     )
                 if route == "/api/catalog":
-                    return self.send(
-                        json.loads((ASSETS.parent / "docs/feature_status.json").read_text())
-                    )
+                    catalog = json.loads((ASSETS.parent / "docs/feature_status.json").read_text(encoding="utf-8"))
+                    labels = json.loads((ASSETS.parent / "docs/feature_labels_en.json").read_text(encoding="utf-8"))
+                    return self.send([{**item, "feature_en": labels[item["id"]]} for item in catalog])
                 target = (ASSETS / ("index.html" if route == "/" else route.lstrip("/"))).resolve()
                 if not target.is_relative_to(ASSETS) or not target.is_file():
                     return self.send({"error": "Not found"}, 404)

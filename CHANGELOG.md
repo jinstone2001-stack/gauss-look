@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0 - 2026-11-11
+
+- Add selectable Korean/English UI and persistent dark/light and display preferences in both native X11 and web frontends.
+- Add editable/pasteable directory paths, parent navigation and a `..` row; retain the web server root boundary.
+- Improve molecular visibility and expose atom/bond scale, labels, colors and font settings without changing scientific data.
+- Provide structured Gaussian input controls with advanced Route, title, Link 0 and additional blocks; keep SMILES input.
+- Compact the analysis inspector and sort numeric table headings in both directions while preserving row identity.
+- Validate input title/Route boundaries and reject multiplicities exceeding the available electrons.
+- Preserve earlier version branches and LICENSE; publish this release as `ver-1.2` and `main`.
+
 ## 1.1.0 - 2026-11-10
 
 - Fix chk→fchk parsing of fixed-width C/H strings, including `Full title (5/4)`; retain strict numeric/logical and truncated-array validation.

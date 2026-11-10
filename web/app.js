@@ -12,13 +12,23 @@ let state = {},
   modeIndex = null,
   currentTask = null,
   renderedFrameKey = null,
-  settings = { labels: false, style: "ball", background: "#101b2b" };
+  settings = {
+    language: "ko", theme: "dark", labels: false, hydrogens: true,
+    style: "ball", background: "#101b2b", atomScale: 0.3, bondRadius: 0.14,
+    selection: "#00d8e6", labelColor: "#f1f5fa", labelSize: 12,
+    font: 'Arial,"Malgun Gothic",sans-serif', fontSize: 14,
+    elementColors: { H: "#e8edf4", C: "#7891ad", N: "#4d8eff", O: "#ff5b68", F: "#5bd684", P: "#f4a340", S: "#ebd14b", Cl: "#5bd684", Br: "#b56d4b", I: "#aa80db", Sn: "#8bcad5" },
+  };
+const defaultSettings = JSON.parse(JSON.stringify(settings));
 try {
   settings = {
     ...settings,
     ...JSON.parse(localStorage.getItem("gausslook.settings") || "{}"),
   };
 } catch (e) {}
+settings.elementColors = { ...defaultSettings.elementColors, ...settings.elementColors };
+settings.language = settings.language === "en" ? "en" : "ko";
+settings.theme = settings.theme === "light" ? "light" : "dark";
 const tabs = [
   "개요",
   "MO·표면",
@@ -35,14 +45,17 @@ const tabs = [
   "도움말",
 ];
 let tab = tabs[0];
+let statusMessage = "파일을 열거나 데모를 선택하세요.", statusError = false;
 function node(tag, text, cls) {
   const n = document.createElement(tag);
-  if (text !== undefined) n.textContent = String(text);
+  if (text !== undefined) n.textContent = ["h2", "h3", "h4", "summary"].includes(tag) ? t(String(text)) : String(text);
   if (cls) n.className = cls;
   return n;
 }
 function status(t, error = false) {
-  $("status").textContent = t;
+  statusMessage = t;
+  statusError = error;
+  $("status").textContent = translate(t);
   $("status").classList.toggle("error", error);
 }
 async function api(path, body) {
@@ -61,7 +74,8 @@ async function api(path, body) {
   return d;
 }
 function button(parent, label, fn) {
-  const b = node("button", label);
+  const b = node("button", t(label));
+  b.dataset.label = label;
   b.title = helpText(label);
   b.onclick = async () => {
     try {
@@ -74,10 +88,10 @@ function button(parent, label, fn) {
   return b;
 }
 function note(parent, text) {
-  parent.append(node("p", text, "note"));
+  parent.append(node("p", t(text), "note"));
 }
 function field(parent, label, value, type = "text") {
-  const l = node("label", label, "field"),
+  const l = node("label", t(label), "field"),
     v = node("input");
   v.type = type;
   v.value = value ?? "";
@@ -86,24 +100,25 @@ function field(parent, label, value, type = "text") {
   return v;
 }
 function select(parent, label, options, value) {
-  const l = node("label", label, "field"),
+  const l = node("label", t(label), "field"),
     s = node("select");
-  for (const [v, t] of options) s.append(new Option(t, v));
+  for (const [v, text] of options) s.append(new Option(t(text), v));
   if (value !== undefined) s.value = value;
   l.append(s);
   parent.append(l);
   return s;
 }
 function table(parent, headers, rows, onClick) {
-  const t = node("table"),
+  const tableElement = node("table"),
     head = node("tr");
-  headers.forEach((h) => head.append(node("th", h)));
   const thead = node("thead");
   thead.append(head);
-  t.append(thead);
+  tableElement.append(thead);
   const body = node("tbody");
+  const records = [];
   rows.forEach((row, i) => {
     const tr = node("tr");
+    tr.dataset.originalIndex = String(i);
     row.forEach((v) =>
       tr.append(node("td", typeof v === "number" ? format(v) : (v ?? "—"))),
     );
@@ -112,10 +127,46 @@ function table(parent, headers, rows, onClick) {
       tr.onclick = () => onClick(i, tr);
     }
     body.append(tr);
+    records.push({ row, index: i, element: tr });
   });
-  t.append(body);
-  parent.append(t);
-  return t;
+  let sortColumn = -1, ascending = true;
+  const numeric = (v) => {
+    if (v === null || v === undefined || v === "" || v === "—") return null;
+    if (typeof v === "number") return Number.isFinite(v) ? v : NaN;
+    if (typeof v === "string" && /^\d+\s+[A-Z][a-z]?$/.test(v.trim())) return parseInt(v, 10);
+    if (typeof v !== "string" || !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?$/.test(v.trim())) return NaN;
+    return Number(v.trim().replace(/[dD]/, "e"));
+  };
+  headers.forEach((h, column) => {
+    const th = node("th", t(h));
+    const values = rows.map((r) => numeric(r[column]));
+    if (values.some((v) => v !== null && Number.isFinite(v)) && values.every((v) => v === null || Number.isFinite(v))) {
+      th.replaceChildren();
+      th.className = "numeric-sort";
+      th.setAttribute("aria-sort", "none");
+      const b = button(th, h, () => {
+        ascending = sortColumn === column ? !ascending : true;
+        sortColumn = column;
+        head.querySelectorAll("th").forEach((cell, j) => {
+          cell.setAttribute("aria-sort", j === column ? (ascending ? "ascending" : "descending") : "none");
+          const control = cell.querySelector("button");
+          if (control) control.textContent = t(headers[j]) + (j === column ? (ascending ? " ▲" : " ▼") : " ↕");
+        });
+        const sorted = [...records].sort((a, b) => {
+          const av = numeric(a.row[column]), bv = numeric(b.row[column]);
+          if (av === null || bv === null) return av === bv ? a.index - b.index : av === null ? 1 : -1;
+          return (ascending ? av - bv : bv - av) || a.index - b.index;
+        });
+        body.replaceChildren(...sorted.map((r) => r.element));
+      });
+      b.textContent = t(h) + " ↕";
+      b.title = t("숫자 오름차순 / 내림차순 정렬 (빈 값은 마지막)");
+    }
+    head.append(th);
+  });
+  tableElement.append(body);
+  parent.append(tableElement);
+  return tableElement;
 }
 function format(x) {
   return Number.isFinite(x)
@@ -137,6 +188,94 @@ function csv(rows) {
       r.map((v) => '"' + String(v ?? "").replaceAll('"', '""') + '"').join(","),
     )
     .join("\n");
+}
+let inputDraft = {};
+function gaussianDialog() {
+  if (!calc?.frames.length) throw Error(ui("먼저 구조를 여세요.", "Open a structure first."));
+  const calculation = calc, inputFrame = frame;
+  const p = $("modalBody");
+  p.replaceChildren(node("h2", "Gaussian 16 · " + t("Gaussian 입력 생성")));
+  const nav = node("div", undefined, "dialog-tabs");
+  p.append(nav);
+  const pages = [node("div"), node("div"), node("div")];
+  pages.forEach((page) => p.append(page));
+  const tabButtons = [];
+  function showPage(index) {
+    pages.forEach((page, i) => { page.hidden = i !== index; });
+    tabButtons.forEach((b, i) => b.classList.toggle("active", i === index));
+  }
+  ["간편 설정", "커스텀 설정", "입력 미리보기"].forEach((label, i) => tabButtons.push(button(nav, label, () => showPage(i))));
+  const values = { method:"B3LYP", basis:"def2SVP", job:"Opt Freq", memory:"4GB", cores:4, checkpoint:"gausslook.chk", scf:"XQC", grid:"UltraFine", dispersion:"None", solvent:"None", extra:"", route:"#p B3LYP/def2SVP Opt Freq", additional:"", override:false, ...inputDraft, charge:calculation.charge ?? 0, multiplicity:calculation.multiplicity ?? 1, title:calculation.name };
+  const controls = {}, grid = node("div", undefined, "form-grid");
+  pages[0].append(grid);
+  const choices = {
+    method:["HF", "B3LYP", "PBE1PBE", "M062X", "wB97XD", "MP2", "CCSD(T)"],
+    basis:["def2SVP", "def2TZVP", "6-31G(d)", "6-311++G(d,p)", "cc-pVDZ", "Gen", "GenECP"],
+    job:["SP", "Opt", "Freq", "Opt Freq", "Opt=(TS,CalcFC) Freq", "IRC=(CalcFC)", "TD(NStates=10)"],
+    scf:["None", "XQC", "QC", "Tight", "VeryTight"],
+    grid:["None", "UltraFine", "SuperFineGrid", "FineGrid"],
+    dispersion:["None", "GD3", "GD3BJ"],
+    solvent:["None", "Water", "Acetonitrile", "Toluene", "DMSO", "THF", "Chloroform", "Dichloromethane"],
+  };
+  for (const [key, label] of [["job","계산 종류"],["method","방법 / XC"],["basis","기저함수"],["charge","총전하"],["multiplicity","스핀 다중도"],["cores","CPU %NProcShared"],["memory","메모리 %Mem"],["checkpoint","체크포인트 %Chk"],["title","제목"],["scf","SCF 보조"],["grid","수치 적분격자"],["dispersion","분산 보정"],["solvent","용매 (SMD)"]]) {
+    controls[key] = choices[key] ? select(grid, label, choices[key].map((v)=>[v,v]), values[key]) : field(grid, label, values[key], ["charge","multiplicity","cores"].includes(key) ? "number" : "text");
+    controls[key].id = "input_" + key;
+  }
+  controls.cores.min = 1; controls.cores.max = 4096;
+  controls.multiplicity.min = 1;
+  [controls.charge, controls.multiplicity, controls.cores].forEach((control) => { control.step = 1; });
+  note(pages[0], "방법과 기저함수를 함께 설정합니다. 현재 선택한 frame의 Cartesian 좌표를 사용합니다.");
+  note(pages[0], `Frame ${inputFrame + 1} / ${calculation.frames.length}`);
+  controls.extra = field(pages[1], "추가 route 키워드", values.extra);
+  controls.override = field(pages[1], "route 직접 입력", "", "checkbox");
+  controls.override.checked = values.override;
+  controls.route = field(pages[1], "Route", values.route);
+  controls.route.disabled = !controls.override.checked;
+  controls.override.onchange = () => { controls.route.disabled = !controls.override.checked; };
+  const additionalLabel = node("label", t("외부 기저 / ECP / 추가 입력"), "field");
+  controls.additional = node("textarea");
+  controls.additional.value = values.additional;
+  additionalLabel.append(controls.additional);
+  pages[1].append(additionalLabel);
+  note(pages[1], "Gen / GenECP 사용 시 검증한 기저 / ECP 블록을 직접 입력하세요. 자동 ECP 추정은 하지 않습니다.");
+  const preview = node("textarea", undefined, "gaussian-preview");
+  preview.id = "inputPreview";
+  preview.readOnly = true;
+  preview.setAttribute("aria-label", t("입력 미리보기"));
+  pages[2].append(preview);
+  note(pages[2], "총전하와 다중도 및 Gen/ECP 블록을 확인하세요. Gaussian 실행이나 스케줄러 제출은 하지 않습니다.");
+  const error = node("p", "", "note error");
+  error.id = "inputError"; error.setAttribute("role", "alert"); p.append(error);
+  function gather() {
+    const v = Object.fromEntries(Object.entries(controls).map(([key, control]) => [key, control.type === "checkbox" ? control.checked : control.value.trim()]));
+    for (const key of ["charge","multiplicity","cores"]) {
+      if (v[key] === "" || !Number.isInteger(Number(v[key]))) throw Error(ui("전하·다중도·CPU는 정수로 입력하세요.", "Charge, multiplicity and CPU cores must be integers."));
+      v[key] = Number(v[key]);
+    }
+    const parts = ["#p", v.method + "/" + v.basis, v.job === "SP" ? "" : v.job];
+    for (const [key, pattern] of [["scf","SCF="],["grid","Integral="],["dispersion","EmpiricalDispersion="]]) {
+      if (v[key] !== "None" && (key !== "grid" || !["HF","MP2","CCSD(T)"].includes(v.method))) parts.push(pattern + v[key]);
+    }
+    if (v.solvent !== "None") parts.push(`SCRF=(SMD,Solvent=${v.solvent})`);
+    parts.push(v.extra);
+    const route = v.override ? v.route : parts.filter(Boolean).join(" ");
+    inputDraft = v;
+    return { route, charge:v.charge, multiplicity:v.multiplicity, cores:v.cores, memory:v.memory, checkpoint:v.checkpoint, title:v.title, additional:v.additional, frame:inputFrame };
+  }
+  async function generate() {
+    error.textContent = "";
+    try {
+      const result = await api("/api/action", {action:"input", id:calculation.id, ...gather()});
+      preview.value = result.text;
+      showPage(2);
+      return result.text;
+    } catch (e) { error.textContent = t(e.message); throw e; }
+  }
+  const actions = node("div", undefined, "dialog-actions"); p.append(actions);
+  button(actions, "입력 생성 / 갱신", generate).id = "generateInput";
+  button(actions, ".gjf 다운로드", async () => download("gausslook.gjf", await generate())).id = "downloadInput";
+  showPage(0);
+  if (!$("modal").open) $("modal").showModal();
 }
 async function refresh() {
   state = await api("/api/state");
@@ -189,7 +328,7 @@ async function result(d) {
     draw(false, d.reference_coords);
     d.meshes.forEach(addMesh);
     viewer.render();
-    status(`MO ${d.orbital} / ${d.spin} · ±위상 표면 (파랑 + / 분홍 −)`);
+    status(`MO ${d.orbital} / ${d.spin} · ` + ui("±위상 표면 (파랑 + / 분홍 −)", "± phase surfaces (blue + / pink −)"));
     return d;
   }
   if (d.ids?.length) await load(d.ids[0]);
@@ -249,40 +388,54 @@ function draw(reset = false, coords = null) {
     applyStyle();
     showSelection();
   });
-  if (reset) viewer.zoomTo();
+  if (reset) fitView();
   else viewer.setView(cam);
   viewer.render();
   $("frameLabel").textContent = `${frame + 1} / ${calc.frames.length}`;
   if (!coords) updateForcePanel().catch((e) => status(e.message, true));
 }
+function fitView() {
+  if (!viewer) return;
+  viewer.zoomTo();
+  const coords = calc?.frames[frame]?.coords || [];
+  const span = coords.length ? Math.max(...[0,1,2].map(axis => Math.max(...coords.map(p=>p[axis])) - Math.min(...coords.map(p=>p[axis])))) : 0;
+  if (coords.length && span < 5) viewer.zoom?.(1.8);
+  viewer.render();
+}
 function applyStyle() {
   if (!model) return;
+  const atomScale = Math.min(0.8, Math.max(0.1, Number(settings.atomScale) || 0.3));
+  const bondRadius = Math.min(0.4, Math.max(0.04, Number(settings.bondRadius) || 0.14));
+  const colorfunc = (a) => settings.elementColors?.[a.elem] || $3Dmol.elementColors?.defaultColors?.[a.elem] || "#8eb8cf";
   let st =
     settings.style === "sphere"
-      ? { sphere: { scale: 0.8 } }
+      ? { sphere: { scale: Math.min(1.5, atomScale * 2.8), colorfunc } }
       : settings.style === "line"
-        ? { line: {} }
+        ? { line: { linewidth: 2, colorfunc } }
         : settings.style === "stick"
-          ? { stick: { radius: 0.16 } }
-          : { stick: { radius: 0.12 }, sphere: { scale: 0.25 } };
+          ? { stick: { radius: bondRadius, colorfunc } }
+          : { stick: { radius: bondRadius, colorfunc }, sphere: { scale: atomScale, colorfunc } };
   model.setStyle({}, st);
-  if (!$("hydrogens").checked) model.setStyle({ elem: "H" }, { hidden: true });
   if (selected.length)
     model.setStyle(
       { index: selected },
       {
-        sphere: { scale: 0.34, color: "#57d1c9" },
-        stick: { radius: 0.16, color: "#57d1c9" },
+        sphere: { scale: atomScale * 1.18, color: settings.selection },
+        stick: { radius: bondRadius * 1.18, color: settings.selection },
       },
     );
+  if (!$("hydrogens").checked) model.setStyle({ elem: "H" }, { sphere: { hidden: true }, stick: { hidden: true }, line: { hidden: true } });
   viewer.removeAllLabels();
   if ($("labels").checked)
     model.selectedAtoms({}).forEach((a, i) =>
-      viewer.addLabel(`${i + 1} ${a.elem}`, {
+      $("hydrogens").checked || a.elem !== "H" ? viewer.addLabel(`${a.index + 1} ${a.elem}`, {
         position: a,
-        fontSize: 11,
-        backgroundOpacity: 0.4,
-      }),
+        fontSize: settings.labelSize,
+        fontColor: settings.labelColor,
+        backgroundColor: settings.background,
+        backgroundOpacity: 0.65,
+        borderThickness: 0,
+      }) : null,
     );
   viewer.render();
 }
@@ -300,7 +453,7 @@ async function showSelection() {
 function stop() {
   if (timer) clearInterval(timer);
   timer = null;
-  $("play").textContent = "▶ 경로";
+  $("play").textContent = t("▶ 경로");
 }
 function animateMode(index, amp = modeAmplitude) {
   stop();
@@ -322,7 +475,7 @@ function animateMode(index, amp = modeAmplitude) {
     draw(false, coords);
     if (modeVectors) drawVectors(coords, m.displacements);
   }, 70);
-  status(`${m.frequency_cm1} cm-1 · 시각화용 진동 변위 (실제 시간축 아님)`);
+  status(`${m.frequency_cm1} cm-1 · ` + ui("시각화용 진동 변위 (실제 시간축 아님)", "visualized mode displacement (not physical time)"));
 }
 function renderPanel() {
   const panel = $("panel");
@@ -352,11 +505,11 @@ function renderPanel() {
       ["계산 유형", calc.kind],
       [
         "전하 / 다중도",
-        `${calc.charge ?? "미확인"} / ${calc.multiplicity ?? "미확인"}`,
+        `${calc.charge ?? t("미확인")} / ${calc.multiplicity ?? t("미확인")}`,
       ],
       ["원자 / 프레임", `${calc.atoms.length} / ${calc.frames.length}`],
     ])
-      note(panel, `${k}: ${v}`);
+      note(panel, `${t(k)}: ${v}`);
     const e = calc.energies.at(-1);
     if (e) {
       const card = node("div", undefined, "card");
@@ -368,7 +521,7 @@ function renderPanel() {
       panel.append(card);
     }
     note(panel, calc.route || "계산 조건 없음");
-    for (const w of calc.warnings) note(panel, "• " + w);
+    for (const w of calc.warnings) note(panel, "• " + t(w));
     panel.append(node("h3", "에너지 레코드"));
     table(
       panel,
@@ -390,7 +543,7 @@ function renderPanel() {
     table(
       panel,
       ["항목", "상태", "근거/조건"],
-      calc.quality.checks.map((q) => [q.check, q.status, q.detail]),
+      calc.quality.checks.map((q) => [t(q.check), q.status, t(q.detail)]),
     );
     panel.append(node("h3", "최적화 기준 (마지막 4개)"));
     table(
@@ -497,26 +650,7 @@ function renderPanel() {
       result(await action("smiles", { smiles: smiles.value })),
     );
     note(panel, "RDKit 필요. 힘장 구조 생성 후 Gaussian 최적화를 수행하세요.");
-    const route = field(panel, "Gaussian route", "#p B3LYP/def2SVP Opt Freq"),
-      q = field(panel, "Charge", calc.charge ?? 0, "number"),
-      mult = field(panel, "Multiplicity", calc.multiplicity ?? 1, "number"),
-      mem = field(panel, "Memory", "4GB"),
-      cores = field(panel, "Cores", 4, "number"),
-      add = node("textarea");
-    add.placeholder = "사용자 추가 입력 (basis/ECP 등)";
-    panel.append(add);
-    button(panel, "Gaussian 입력 저장", async () => {
-      const d = await action("input", {
-        route: route.value,
-        charge: +q.value,
-        multiplicity: +mult.value,
-        memory: mem.value,
-        cores: +cores.value,
-        additional: add.value,
-        frame,
-      });
-      download(d.filename, d.text);
-    });
+    button(panel, "Gaussian 입력 생성", gaussianDialog);
     button(panel, "선택 원자 삭제 → 새 구조", async () => {
       if (!selected.length) throw Error("원자를 먼저 선택하세요.");
       await result(
@@ -544,7 +678,7 @@ function renderPanel() {
     table(
       panel,
       ["도구", "경로"],
-      Object.entries(state.utilities || {}).map(([k, v]) => [k, v || "미설치"]),
+      Object.entries(state.utilities || {}).map(([k, v]) => [k, v || t("미설치")]),
     );
     button(panel, "원본 출력 첫 500행", async () =>
       showObject(await action("source")),
@@ -589,9 +723,9 @@ function renderPanel() {
       panel,
       ["기능", "가용성", "조건"],
       calc.capabilities.map((v) => [
-        v.feature,
-        v.available ? "가능" : "데이터/연동 필요",
-        v.reason,
+        t(v.feature),
+        t(v.available ? "가능" : "데이터/연동 필요"),
+        t(v.reason),
       ]),
     );
   }
@@ -624,7 +758,7 @@ async function showCatalog(panel) {
   table(
     panel,
     ["ID", "기능", "상태"],
-    d.map((v) => [v.id, v.feature, v.status]),
+    d.map((v) => [v.id, settings.language === "en" ? v.feature_en || v.feature : v.feature, t(v.status)]),
   );
 }
 function pathPlot() {
@@ -652,11 +786,12 @@ function plot() {
   ctx.scale(dpr, dpr);
   const w = r.width,
     h = r.height;
-  ctx.fillStyle = "#101b2b";
+  ctx.fillStyle = settings.background;
   ctx.fillRect(0, 0, w, h);
   if (!plotData?.x.length) {
-    ctx.fillStyle = "#94a9c0";
-    ctx.fillText("스펙트럼 또는 경로를 선택하세요.", 40, 50);
+    $("plotTitle").textContent = t("계산 경로 / 스펙트럼");
+    ctx.fillStyle = settings.theme === "light" ? "#52677e" : "#94a9c0";
+    ctx.fillText(t("스펙트럼 또는 경로를 선택하세요."), 40, 50);
     return;
   }
   const xs = plotData.x,
@@ -675,9 +810,9 @@ function plot() {
   }
   const X = (x) => 45 + ((x - xmin) / (xmax - xmin)) * (w - 62),
     Y = (y) => h - 32 - ((y - ymin) / (ymax - ymin)) * (h - 49);
-  ctx.strokeStyle = "#344b66";
+  ctx.strokeStyle = settings.theme === "light" ? "#c8d4e1" : "#344b66";
   ctx.strokeRect(45, 16, w - 62, h - 48);
-  ctx.strokeStyle = "#57d1c9";
+  ctx.strokeStyle = settings.theme === "light" ? "#087d82" : "#57d1c9";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
   xs.forEach((x, i) => {
@@ -685,7 +820,7 @@ function plot() {
     else ctx.lineTo(X(x), Y(ys[i]));
   });
   ctx.stroke();
-  ctx.fillStyle = "#94a9c0";
+  ctx.fillStyle = settings.theme === "light" ? "#52677e" : "#94a9c0";
   ctx.font = "11px Arial";
   ctx.fillText(format(ymax), 2, 20);
   ctx.fillText(format(ymin), 2, h - 33);
@@ -724,7 +859,7 @@ $("uploadBtn").onclick = () => $("upload").click();
 $("upload").onchange = async (event) => {
   for (const file of event.target.files) {
     try {
-      status(file.name + " 읽는 중…");
+      status(file.name + ui(" 읽는 중…", " · Reading…"));
       const data = new Uint8Array(await file.arrayBuffer());
       let binary = "";
       for (let i = 0; i < data.length; i += 32768)
@@ -757,10 +892,7 @@ $("projectBtn").onclick = async () =>
     "application/json",
   );
 $("closeModal").onclick = () => $("modal").close();
-$("center").onclick = () => {
-  viewer?.zoomTo();
-  viewer?.render();
-};
+$("center").onclick = fitView;
 $("labels").checked = settings.labels;
 $("style").value = settings.style;
 $("cancelBtn").onclick = () => {
@@ -780,7 +912,8 @@ $("labels").onchange = () => {
   applyStyle();
   localStorage.setItem("gausslook.settings", JSON.stringify(settings));
 };
-$("hydrogens").onchange = applyStyle;
+$("hydrogens").checked = settings.hydrogens;
+$("hydrogens").onchange = () => { settings.hydrogens = $("hydrogens").checked; applyStyle(); saveSettings(); };
 $("clearSelection").onclick = () => {
   selected = [];
   applyStyle();
@@ -803,7 +936,7 @@ $("play").onclick = () => {
     $("frame").value = frame;
     draw();
   }, 160);
-  $("play").textContent = "■ 정지";
+  $("play").textContent = t("■ 정지");
 };
 $("xyzBtn").onclick = async () => {
   try {
@@ -855,17 +988,26 @@ $("browseBtn").onclick = () => browse("").catch((e) => status(e.message, true));
 async function browse(path) {
   const d = await api("/api/browse?path=" + encodeURIComponent(path));
   const root = $("modalBody");
-  root.replaceChildren(node("h2", "서버 폴더 / " + d.path));
-  if (d.path && d.path !== ".")
-    button(root, "상위 폴더", () =>
-      browse(d.path.split("/").slice(0, -1).join("/")),
-    );
+  root.replaceChildren(node("h2", "서버 폴더"));
+  const row = node("div", undefined, "path-row");
+  root.append(row);
+  const pathInput = field(row, "서버 디렉터리 경로", d.absolute_path || d.path || ".");
+  pathInput.id = "browsePath";
+  pathInput.autocomplete = "off";
+  pathInput.spellcheck = false;
+  const go = () => browse(pathInput.value.trim()).catch((e) => status(e.message, true));
+  button(row, "이동", go).id = "browseGo";
+  pathInput.onkeydown = (event) => { if (event.key === "Enter") { event.preventDefault(); go(); } };
+  note(root, "경로를 입력하거나 붙여넣고 Enter를 누르세요. 서버의 허용된 루트 안에서 탐색합니다.");
+  const parent = Object.prototype.hasOwnProperty.call(d, "parent") ? d.parent : d.path && d.path !== "." ? d.path.replace(/\\/g, "/").split("/").slice(0,-1).join("/") : null;
+  if (parent !== null) button(root, "상위 폴더", () => browse(parent));
+  const entries = parent !== null ? [{ name: "..", directory: true, path: parent }, ...d.entries] : d.entries;
   table(
     root,
     ["이름", "종류"],
-    d.entries.map((v) => [v.name, v.directory ? "폴더" : v.size + " bytes"]),
+    entries.map((v) => [v.name, v.directory ? t("폴더") : v.size + " bytes"]),
     async (i) => {
-      const v = d.entries[i];
+      const v = entries[i];
       try {
         if (v.directory) await browse(v.path);
         else {
@@ -879,25 +1021,117 @@ async function browse(path) {
   );
   if (!$("modal").open) $("modal").showModal();
 }
-$("settingsBtn").onclick = () => {
+function saveSettings() {
+  try { localStorage.setItem("gausslook.settings", JSON.stringify(settings)); } catch (e) { /* Private browsing may disable persistence. */ }
+}
+function applyAppearance() {
+  const root = document.documentElement;
+  root.dataset.theme = settings.theme;
+  root.lang = settings.language;
+  root.style.setProperty("--font", settings.font || defaultSettings.font);
+  root.style.fontSize = Math.max(10, Math.min(24, Number(settings.fontSize) || 14)) + "px";
+  root.style.setProperty("--viewer", settings.background);
+  viewer?.setBackgroundColor(settings.background);
+  viewer?.render();
+  $("language").value = settings.language;
+  $("themeBtn").textContent = t(settings.theme === "dark" ? "☀ 라이트 모드" : "☾ 다크 모드");
+  $("themeBtn").title = ui("다크 / 라이트 화면을 전환하고 저장합니다.", "Switch and save the dark / light theme.");
+  $("labels").checked = settings.labels;
+  $("hydrogens").checked = settings.hydrogens;
+  $("style").value = settings.style;
+  applyStyle();
+  plot();
+}
+function applyLanguage() {
+  const labels = { uploadBtn:"파일 열기", browseBtn:"서버 폴더", demoBtn:"데모", projectBtn:"프로젝트 저장", refreshBtn:"새로고침", cancelBtn:"작업 취소", settingsBtn:"설정", displayBtn:"화면 설정", helpBtn:"도움말", center:"중심", clearSelection:"선택 해제", xyzBtn:"XYZ 저장", closeModal:"닫기", snapshot:"PNG", plotCsv:"CSV", plotSvg:"SVG" };
+  for (const [id, label] of Object.entries(labels)) {
+    $(id).textContent = t(label);
+    $(id).dataset.label = label;
+    $(id).title = helpText(label);
+  }
+  $("language").title = t("언어를 선택합니다. 전문용어와 원본 계산 자료는 유지합니다.");
+  $("displayBtn").title = t("화면 설정을 변경합니다.");
+  document.querySelector(".section-title").textContent = t("프로젝트 탐색기");
+  const aside = document.querySelector(".aside-note");
+  aside.replaceChildren(node("span", ".log · .out · .chk · .fchk"), node("br"), node("span", ".cube · .gjf · .xyz · .sdf"), node("br"), node("br"), node("span", t("원본 계산 결과와 편집 구조를 구별합니다.")));
+  $("labels").parentElement.replaceChildren($("labels"), document.createTextNode(t("번호")));
+  $("labels").title = t("원자 번호 표시");
+  $("hydrogens").title = t("수소 표시");
+  const styleLabels = {ball:"Ball & stick",stick:"Sticks",line:"Wireframe",sphere:"Space filling"};
+  [...$("style").options].forEach((option) => { option.textContent = t(styleLabels[option.value]); });
+  $("viewer").title = t("드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 이동 · 원자 클릭: 선택");
+  $("play").textContent = t(timer ? "■ 정지" : "▶ 경로");
+  $("play").title = helpText("▶ 경로");
+  status(calc ? statusMessage : "파일을 열거나 데모를 선택하세요.", statusError);
+  if (!plotData) $("plotTitle").textContent = t("계산 경로 / 스펙트럼");
+}
+function settingsDialog() {
   const p = $("modalBody");
   p.replaceChildren(node("h2", "표시 설정"));
-  const font = select(p, "폰트", [
+  const appearance = node("div", undefined, "form-grid");
+  p.append(appearance);
+  const language = select(appearance, "언어", [["ko", "한국어"], ["en", "English"]], settings.language),
+    theme = select(appearance, "테마", [["dark", "다크"], ["light", "라이트"]], settings.theme),
+    font = select(appearance, "폰트", [
       ['Arial,"Malgun Gothic",sans-serif', "Arial / 맑은 고딕"],
       ['Calibri,"Gulim",sans-serif', "Calibri / 굴림"],
       ['"Noto Sans CJK KR",sans-serif', "Noto Sans KR"],
-    ]),
-    size = field(p, "글자 크기 px", 14, "number"),
-    bg = field(p, "Viewer 배경", settings.background, "color");
-  button(p, "적용", () => {
-    document.documentElement.style.setProperty("--font", font.value);
-    document.documentElement.style.fontSize = size.value + "px";
-    settings.background = bg.value;
-    viewer.setBackgroundColor(bg.value);
-    viewer.render();
-    localStorage.setItem("gausslook.settings", JSON.stringify(settings));
+    ], settings.font),
+    size = field(appearance, "글자 크기 px", settings.fontSize, "number");
+  size.min = 10; size.max = 24;
+  p.append(node("h3", "구조 뷰어"));
+  const view = node("div", undefined, "form-grid");
+  p.append(view);
+  const bg = field(view, "Viewer 배경", settings.background, "color"),
+    selection = field(view, "선택 색상", settings.selection, "color"),
+    atoms = field(view, "원자 크기", settings.atomScale, "number"),
+    bonds = field(view, "결합 반지름 (Å)", settings.bondRadius, "number"),
+    labelColor = field(view, "레이블 색상", settings.labelColor, "color"),
+    labelSize = field(view, "레이블 크기 px", settings.labelSize, "number"),
+    labels = field(view, "원자 번호 표시", "", "checkbox"),
+    hydrogens = field(view, "수소 표시", "", "checkbox");
+  labels.checked = settings.labels; hydrogens.checked = settings.hydrogens;
+  atoms.min = 0.1; atoms.max = 0.8; atoms.step = 0.05;
+  bonds.min = 0.04; bonds.max = 0.4; bonds.step = 0.01;
+  labelSize.min = 8; labelSize.max = 24;
+  theme.onchange = () => {
+    bg.value = theme.value === "light" ? "#eef3f7" : "#101b2b";
+    labelColor.value = theme.value === "light" ? "#203146" : "#f1f5fa";
+  };
+  p.append(node("h3", "원소별 색상"));
+  const colors = node("div", undefined, "element-colors");
+  p.append(colors);
+  const elementFields = {};
+  const symbols = new Set([...Object.keys(settings.elementColors), ...(calc?.atoms || []).map((z) => elements[z])]);
+  for (const symbol of symbols) elementFields[symbol] = field(colors, symbol, settings.elementColors[symbol] || "#8eb8cf", "color");
+  const actions = node("div", undefined, "dialog-actions");
+  p.append(actions);
+  button(actions, "적용 / 저장", () => {
+    const ranges = [[size,10,24],[atoms,0.1,0.8],[bonds,0.04,0.4],[labelSize,8,24]];
+    if (ranges.some(([control,min,max]) => !Number.isFinite(+control.value) || +control.value < min || +control.value > max)) throw Error(ui("표시 설정의 숫자 범위를 확인하세요.", "Check the numeric ranges in display settings."));
+    Object.assign(settings, { language: language.value, theme: theme.value, font: font.value, fontSize:+size.value, background:bg.value, selection:selection.value, atomScale:+atoms.value, bondRadius:+bonds.value, labelColor:labelColor.value, labelSize:+labelSize.value, labels:labels.checked, hydrogens:hydrogens.checked, elementColors:Object.fromEntries(Object.entries(elementFields).map(([symbol,input])=>[symbol,input.value])) });
+    saveSettings(); applyAppearance(); applyLanguage(); renderPanel();
+    status("표시 설정을 저장했습니다.");
+    $("modal").close();
   });
-  $("modal").showModal();
+  button(actions, "기본값 복원", () => {
+    const oldLanguage = settings.language;
+    settings = JSON.parse(JSON.stringify(defaultSettings));
+    settings.language = oldLanguage;
+    saveSettings(); applyAppearance(); applyLanguage(); renderPanel(); settingsDialog();
+  });
+  if (!$("modal").open) $("modal").showModal();
+}
+$("settingsBtn").onclick = settingsDialog;
+$("displayBtn").onclick = settingsDialog;
+$("language").onchange = () => {
+  settings.language = $("language").value; saveSettings(); applyLanguage(); applyAppearance(); renderPanel();
+};
+$("themeBtn").onclick = () => {
+  settings.theme = settings.theme === "dark" ? "light" : "dark";
+  settings.background = settings.theme === "light" ? "#eef3f7" : "#101b2b";
+  settings.labelColor = settings.theme === "light" ? "#203146" : "#f1f5fa";
+  saveSettings(); applyAppearance(); renderPanel();
 };
 try {
   viewer = $3Dmol.createViewer("viewer", {
@@ -926,6 +1160,8 @@ Promise.all([
   }),
 ])
   .then(() => {
+    applyLanguage();
+    applyAppearance();
     applyHelpTitles();
     renderPanel();
     if (state.calculations.length) load(state.calculations[0].id);

@@ -10,6 +10,8 @@ from .model import ELEMENTS, COLORS, bonds, xyz_text
 from .analysis import measure
 from .desktop_core import CorePanels
 from .help_ui import install_tooltips
+from .native_appearance import NativeAppearance
+from .native_dialogs import PathFileDialog, gaussian_dialog
 
 
 class MoleculeCanvas(tk.Canvas):
@@ -28,6 +30,11 @@ class MoleculeCanvas(tk.Canvas):
         self.style = "ball"
         self.show_h = True
         self.dragged = False
+        self.atom_scale = self.bond_scale = 1.0
+        self.element_colors = {}
+        self.selection_color = "#09bfd6"
+        self.label_color = "#e0eaf5"
+        self.empty_text = "GaussLook / Open files or Demo"
         self.bind("<Configure>", lambda e: self.render())
         self.bind("<ButtonPress-1>", self.press)
         self.bind("<B1-Motion>", self.move)
@@ -87,7 +94,7 @@ class MoleculeCanvas(tk.Canvas):
             self.create_text(
                 max(100, self.winfo_width() / 2),
                 max(80, self.winfo_height() / 2),
-                text="GaussLook  /  파일 열기 또는 데모",
+                text=self.empty_text,
                 fill="#94a9c0",
                 font=("Arial", 13),
             )
@@ -128,41 +135,55 @@ class MoleculeCanvas(tk.Canvas):
                     outline="",
                     stipple="gray50",
                 )
+        # Sort atom and bond primitives together. Short bond sections prevent a
+        # back bond from painting over a foreground atom at crossing points.
+        def atom_color(i):
+            z = self.atoms[i]
+            return self.element_colors.get(str(z), COLORS.get(z, "#b1a3c7"))
+
+        def shade(color, factor):
+            rgb = self.winfo_rgb(color)
+            return "#" + "".join(f"{max(0, min(255, int(v / 257 * factor))):02x}" for v in rgb)
+
+        primitives = []
         if self.style != "sphere":
             for i, j in bonds(self.atoms, self.coords):
                 if not self.show_h and (self.atoms[i] == 1 or self.atoms[j] == 1):
                     continue
-                self.create_line(
-                    *p[i, :2],
-                    *p[j, :2],
-                    fill="#71859d",
-                    width=1 if self.style == "line" else max(2, min(9, scale * 0.09)),
-                )
-        for i in np.argsort(p[:, 2]):
-            z = self.atoms[i]
-            if z == 1 and not self.show_h:
+                for segment in range(12):
+                    a = p[i] + (p[j] - p[i]) * segment / 12
+                    b = p[i] + (p[j] - p[i]) * (segment + 1) / 12
+                    primitives.append(((a[2] + b[2]) / 2, "bond", (a, b, atom_color(i if segment < 6 else j))))
+        for i in range(len(self.atoms)):
+            if self.show_h or self.atoms[i] != 1:
+                primitives.append((p[i, 2], "atom", i))
+        bond_width = (1.2 if self.style == "line" else max(2.5, min(16, scale * .12))) * self.bond_scale
+        for depth, kind, item in sorted(primitives, key=lambda item: item[0]):
+            if kind == "bond":
+                a, b, color = item
+                self.create_line(*a[:2], *b[:2], fill=shade(color, .65), width=bond_width + 1, capstyle="round")
+                self.create_line(*a[:2], *b[:2], fill=shade(color, .98), width=max(1, bond_width * .58), capstyle="round")
                 continue
-            r = 2 if self.style == "line" else max(4, min(23, (0.25 if z == 1 else 0.39) * scale))
+            i = item
+            z = self.atoms[i]
+            radius = (.24 if z == 1 else .36) if self.style != "stick" else .105
+            r = 2 if self.style == "line" else max(3, min(52, radius * scale * self.atom_scale))
             if self.style == "sphere":
                 r *= 2.2
-            color = "#57d1c9" if i in self.selected else COLORS.get(z, "#b1a3c7")
-            self.create_oval(
-                p[i, 0] - r,
-                p[i, 1] - r,
-                p[i, 0] + r,
-                p[i, 1] + r,
-                fill=color,
-                outline="#c8f6f2" if i in self.selected else "#152238",
-                width=2,
-            )
+            color = atom_color(i)
+            cx, cy = p[i, :2]
+            self.create_oval(cx-r, cy-r, cx+r, cy+r, fill=shade(color, .48), outline=shade(color, .36))
+            # Offset concentric highlights give a CPU sphere impression without
+            # requiring a remote OpenGL context in an X11 session.
+            if self.style != "line":
+                for fraction, brightness in [(.89, .68), (.74, .88), (.57, 1.04), (.36, 1.18), (.16, 1.38)]:
+                    rr = r * fraction
+                    offset = r * (.18 * (1-fraction))
+                    self.create_oval(cx-rr-offset, cy-rr-offset, cx+rr-offset, cy+rr-offset, fill=shade(color, brightness), outline="")
+            if i in self.selected:
+                self.create_oval(cx-r-2, cy-r-2, cx+r+2, cy+r+2, outline=self.selection_color, width=2)
             if self.labels:
-                self.create_text(
-                    p[i, 0] + r + 7,
-                    p[i, 1] - r,
-                    text=f"{i+1} {ELEMENTS[z]}",
-                    fill="#e6edf5",
-                    font=("Arial", 10),
-                )
+                self.create_text(cx+r+7, cy-r, text=f"{i+1} {ELEMENTS[z]}", fill=self.label_color, font="TkDefaultFont")
 
         if self.vectors is not None and np.asarray(self.vectors).shape == self.coords.shape:
             vectors = np.asarray(self.vectors, float)
@@ -178,6 +199,9 @@ class PlotCanvas(tk.Canvas):
         super().__init__(parent, bg="#101b2b", height=175, highlightthickness=0)
         self.data = None
         self.callback = callback
+        self.foreground = "#94a9c0"
+        self.accent = "#57d1c9"
+        self.english = False
         self.bind("<Configure>", lambda e: self.render())
         self.bind("<Button-1>", self.click)
 
@@ -189,7 +213,7 @@ class PlotCanvas(tk.Canvas):
         self.delete("all")
         d = self.data
         if not d or not d.get("x"):
-            self.create_text(100, 40, text="스펙트럼 / 경로", fill="#94a9c0")
+            self.create_text(100, 40, text="Spectrum / path" if self.english else "스펙트럼 / 경로", fill=self.foreground)
             return
         x = np.array(d["x"])
         y = np.array(d["y"])
@@ -202,15 +226,15 @@ class PlotCanvas(tk.Canvas):
         self.create_rectangle(45, 15, w - 15, h - 30, outline="#344b66")
         if len(x) > 1:
             self.create_line(
-                np.column_stack([px, py]).reshape(-1).tolist(), fill="#57d1c9", width=1.5
+                np.column_stack([px, py]).reshape(-1).tolist(), fill=self.accent, width=1.5
             )
         else:
-            self.create_oval(px[0] - 3, py[0] - 3, px[0] + 3, py[0] + 3, fill="#57d1c9")
+            self.create_oval(px[0] - 3, py[0] - 3, px[0] + 3, py[0] + 3, fill=self.accent)
         self.create_text(
-            45, h - 12, text=f'{a:.3f} {d.get("x_unit","")}', anchor="w", fill="#94a9c0"
+            45, h - 12, text=f'{a:.3f} {d.get("x_unit","")}', anchor="w", fill=self.foreground
         )
-        self.create_text(w - 15, h - 12, text=f"{b:.3f}", anchor="e", fill="#94a9c0")
-        self.create_text(3, 15, text=f"{e:.5g}", anchor="w", fill="#94a9c0")
+        self.create_text(w - 15, h - 12, text=f"{b:.3f}", anchor="e", fill=self.foreground)
+        self.create_text(3, 15, text=f"{e:.5g}", anchor="w", fill=self.foreground)
 
     def click(self, event):
         if not self.data or not self.data.get("sticks"):
@@ -221,11 +245,12 @@ class PlotCanvas(tk.Canvas):
         self.callback(self.data["kind"], s["index"])
 
 
-class App(CorePanels):
+class App(NativeAppearance, CorePanels):
     def __init__(self, engine, quit_after=None):
         self.engine = engine
+        self.load_preferences()
         self.root = tk.Tk()
-        self.root.title("GaussLook 1.1 · Gaussian 16 Analysis Studio")
+        self.root.title("GaussLook 1.2 · Gaussian 16 Analysis Studio")
         self.root.geometry("1440x900")
         self.root.minsize(1050, 700)
         self.calc = None
@@ -248,9 +273,12 @@ class App(CorePanels):
             any(k in f.lower() for k in ["gothic", "cjk", "gulim", "nanum", "malgun"])
             for f in families
         )
-        self.cjk = self.cjk and any(
+        self.has_cjk_font = self.cjk and any(
             f in families for f in ["Malgun Gothic", "Noto Sans CJK KR", "NanumGothic", "Gulim"]
         )
+        if not self.has_cjk_font and not self.preference_path.exists():
+            self.language = self.preferences["language"] = "en"
+        self.cjk = self.language == "ko"
         font.nametofont("TkDefaultFont").configure(family=chosen, size=10)
         font.nametofont("TkTextFont").configure(family=chosen, size=10)
         theme = ttk.Style()
@@ -270,12 +298,16 @@ class App(CorePanels):
             ("도움말", self.show_help),
         ]:
             ttk.Button(bar, text=label, command=self.safe(fn)).pack(side="left", padx=3)
-        ttk.Label(bar, text="GaussLook 1.1", font=(chosen, 17, "bold")).pack(side="right", padx=12)
+        ttk.Label(bar, text="GaussLook 1.2", font=(chosen, 17, "bold")).pack(side="right", padx=8)
+        self.language_var = tk.StringVar(value="한국어" if self.cjk else "English")
+        language = ttk.Combobox(bar, textvariable=self.language_var, values=["한국어", "English"], state="readonly", width=8)
+        language.pack(side="right", padx=4)
+        language.bind("<<ComboboxSelected>>", lambda event: (self.apply_language("ko" if self.language_var.get() == "한국어" else "en"), self.save_preferences()))
         panes = ttk.Panedwindow(self.root, orient="horizontal")
         panes.pack(fill="both", expand=True, padx=8, pady=4)
         left = ttk.Frame(panes, width=225)
         panes.add(left, weight=0)
-        ttk.Label(left, text="PROJECT EXPLORER").pack(anchor="w", pady=8)
+        ttk.Label(left, text="프로젝트 탐색기").pack(anchor="w", pady=8)
         self.list = tk.Listbox(left, width=29, exportselection=False)
         self.list.pack(fill="both", expand=True)
         self.list.bind("<<ListboxSelect>>", self.pick)
@@ -294,11 +326,11 @@ class App(CorePanels):
         self.style = ttk.Combobox(
             controls, values=["ball", "stick", "line", "sphere"], width=9, state="readonly"
         )
-        self.style.set("ball")
+        self.style.set(self.preferences["style"])
         self.style.pack(side="left")
         self.style.bind("<<ComboboxSelected>>", lambda e: self.apply_style())
-        self.label_var = tk.BooleanVar()
-        self.h_var = tk.BooleanVar(value=True)
+        self.label_var = tk.BooleanVar(value=self.preferences["labels"])
+        self.h_var = tk.BooleanVar(value=self.preferences["hydrogens"])
         ttk.Checkbutton(
             controls, text="번호", variable=self.label_var, command=self.apply_style
         ).pack(side="left")
@@ -362,17 +394,17 @@ class App(CorePanels):
             f = ttk.Frame(self.notebook, padding=8)
             self.notebook.add(f, text=title)
             self.panels[title] = f
-        ttk.Button(bar, text="Cancel task", command=self.cancel_task).pack(side="left", padx=3)
+        ttk.Button(bar, text="작업 취소", command=self.cancel_task).pack(side="left", padx=3)
         self.current_task = None
         self.build_panels()
         self.root.bind("<F1>", self.show_help)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.refresh()
-        if not self.cjk:
-            self.english_labels()
-            self.status.configure(
-                text="English fallback: CJK font is unavailable in this Tk/X11 build. Web mode supports Korean."
-            )
+        self.apply_language()
+        self.apply_appearance()
+        self.apply_style(save=False)
+        if self.cjk and not self.has_cjk_font:
+            self.status.configure(text="한글 글꼴을 서버에 설치하면 한국어 표시가 개선됩니다. Language: English 선택 가능.")
         install_tooltips(self.root, english=not self.cjk)
         if self.engine.calcs:
             self.load(next(iter(self.engine.calcs)))
@@ -425,12 +457,13 @@ class App(CorePanels):
         self.mult = ttk.Entry(r, width=5)
         self.mult.insert(0, "1")
         self.mult.pack(side="left")
-        ttk.Label(r, text="Charge / Multiplicity").pack(side="left")
+        ttk.Label(r, text="전하 / 다중도").pack(side="left")
         self.additional = tk.Text(f, height=8, width=48)
         self.additional.pack(fill="both", expand=True)
         ttk.Button(f, text="Gaussian 입력 저장", command=self.safe(self.export_input)).pack(
             fill="x", pady=4
         )
+        ttk.Button(f, text="Gaussian 입력 설정…", command=self.safe(lambda: gaussian_dialog(self))).pack(fill="x", pady=4)
         ttk.Button(f, text="선택 원자 삭제 → 새 구조", command=self.safe(self.delete_atoms)).pack(
             fill="x"
         )
@@ -467,6 +500,21 @@ class App(CorePanels):
         self.scale.configure(to=max(0, len(self.calc.frames) - 1))
         self.scale.set(self.frame)
         self.draw(True)
+        self.refresh_summary()
+        self.fill_modes()
+        self.fill_mos()
+        self.fill_frame_table()
+        self.fill_polar()
+        self.update_frame_analysis()
+        self.charge.delete(0, "end")
+        self.charge.insert(0, str(self.calc.charge or 0))
+        self.mult.delete(0, "end")
+        self.mult.insert(0, str(self.calc.multiplicity or 1))
+        self.status.configure(text=self.calc.name + " · " + self.calc.status["termination"])
+        self.path_plot()
+
+    def refresh_summary(self):
+        cid = self.calc.id
         data = self.engine.detail(cid)
         overview = {
             k: v
@@ -487,11 +535,6 @@ class App(CorePanels):
         }
         quality_data = {"quality": data["quality"], "convergence": data["convergence"][-4:]}
         if not self.cjk:
-            overview["warnings"] = (
-                ["Source-specific caveats apply. See original output or Korean web UI."]
-                if overview["warnings"]
-                else []
-            )
             quality_data = {
                 "termination": data["status"],
                 "imaginary_count": data["quality"]["imaginary_count"],
@@ -505,17 +548,6 @@ class App(CorePanels):
             ("물성", data["properties"]),
         ]:
             self.set_text(self.texts[name], json.dumps(value, ensure_ascii=not self.cjk, indent=2))
-        self.fill_modes()
-        self.fill_mos()
-        self.fill_frame_table()
-        self.fill_polar()
-        self.update_frame_analysis()
-        self.charge.delete(0, "end")
-        self.charge.insert(0, str(self.calc.charge or 0))
-        self.mult.delete(0, "end")
-        self.mult.insert(0, str(self.calc.multiplicity or 1))
-        self.status.configure(text=self.calc.name + " · " + self.calc.status["termination"])
-        self.path_plot()
 
     def set_text(self, t, value):
         t.delete("1.0", "end")
@@ -549,11 +581,14 @@ class App(CorePanels):
         self.viewer.render()
         self.selection.configure(text="")
 
-    def apply_style(self):
+    def apply_style(self, save=True):
         self.viewer.style = self.style.get()
         self.viewer.labels = self.label_var.get()
         self.viewer.show_h = self.h_var.get()
         self.viewer.render()
+        self.preferences.update(style=self.style.get(), labels=self.label_var.get(), hydrogens=self.h_var.get())
+        if save:
+            self.save_preferences()
 
     def center(self):
         self.viewer.zoom = 1.0
@@ -642,7 +677,7 @@ class App(CorePanels):
         }
         if p["kind"] == "Raman":
             laser = simpledialog.askfloat(
-                "Raman", "레이저 파장 nm", initialvalue=532, parent=self.root
+                "Raman", self.words("레이저 파장 nm", "Laser wavelength nm"), initialvalue=532, parent=self.root
             )
             if laser is None:
                 return
@@ -717,18 +752,12 @@ class App(CorePanels):
             self.status.configure(text="Task cancellation requested.")
 
     def open_files(self):
-        paths = filedialog.askopenfilenames(
-            parent=self.root,
-            title="Gaussian 결과 / 구조 / cube",
-            filetypes=[
-                (
-                    "Gaussian and structures",
-                    "*.log *.out *.chk *.fchk *.fch *.cube *.cub *.gjf *.com *.xyz *.sdf *.mol *.pdb *.glproj",
-                ),
-                ("All", "*"),
-            ],
-        )
+        dialog = PathFileDialog(self, self.preferences["last_directory"])
+        self.root.wait_window(dialog.win)
+        paths = dialog.result
         if paths:
+            self.preferences["last_directory"] = str(Path(paths[0]).parent)
+            self.save_preferences()
 
             def run(t):
                 ids = []
@@ -846,6 +875,8 @@ class App(CorePanels):
 
     def export_input(self):
         if self.calc:
+            draft = getattr(self, "input_options", {})
+            extra = {key: draft[key] for key in ("title", "memory", "cores", "checkpoint") if key in draft} if draft.get("_calculation_id") == self.calc.id else {}
             d = self.engine.action(
                 "input",
                 self.calc.id,
@@ -854,6 +885,7 @@ class App(CorePanels):
                 multiplicity=int(self.mult.get()),
                 additional=self.additional.get("1.0", "end"),
                 frame=self.frame,
+                **extra,
             )
             self.save("Gaussian input", ".gjf", d["text"])
 
@@ -884,13 +916,18 @@ class App(CorePanels):
             self.set_text(self.output, self.engine.action("source", self.calc.id)["text"])
 
     def catalog(self):
-        self.set_text(
-            self.output,
-            (Path(__file__).resolve().parent.parent / "docs/FEATURE_STATUS.md").read_text(),
-        )
+        docs = Path(__file__).resolve().parent.parent / "docs"
+        if self.cjk:
+            text = (docs / "FEATURE_STATUS.md").read_text(encoding="utf-8")
+        else:
+            labels = json.loads((docs / "feature_labels_en.json").read_text(encoding="utf-8"))
+            statuses = {"지원": "Supported", "부분·조건부": "Partial / conditional", "후속 구현": "Planned"}
+            items = json.loads((docs / "feature_status.json").read_text(encoding="utf-8"))
+            text = "Feature status / 140 planned features\n\n" + "\n".join(f'{item["id"]} | {labels[item["id"]]} | {statuses[item["status"]]}' for item in items)
+        self.set_text(self.output, text)
         self.select_panel("도구")
 
-    def settings(self):
+    def legacy_settings(self):
         win = tk.Toplevel(self.root)
         win.title("표시 설정")
         ttk.Label(win, text="폰트").pack()

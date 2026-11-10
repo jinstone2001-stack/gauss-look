@@ -3,6 +3,10 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+.test-tmp/
+.ui-deps/
+test-artifacts/
+.gausslook-ui.json
 *.glproj
 *.chk
 *.fchk

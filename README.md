@@ -1,4 +1,4 @@
-# GaussLook 1.1
+# GaussLook 1.2
 
 Gaussian 16 결과 분석 프로그램입니다. **하나의 Python 분석 엔진을 X11 GUI와 웹 GUI가 공유**합니다.
 
@@ -11,7 +11,17 @@ python GaussLook.py --web --port 8888
 
 1.1에서는 **MO/HOMO/LUMO, 진동·허수 모드, 구조별 에너지·Force, 분극률**을 전용 화면에서 분석합니다. `Full title (5/4)` 오류를 일으키던 fchk 문자열 배열을 Gaussian 고정 폭 형식으로 읽도록 수정했습니다. GaussView 전체 기능을 완전히 대체하는 버전은 아닙니다.
 
-## 1.1의 주요 분석 흐름
+## 1.2의 화면 개선
+
+- 설정에서 한국어/English와 Dark/Light를 선택하고 글꼴·분자 배경·원자와 결합 크기 등을 조절합니다. 전문용어·수치·단위와 사용자가 입력한 내용은 유지합니다.
+- 서버 폴더에서 경로를 직접 입력하거나 붙여넣습니다. Enter/이동, 상위 폴더 버튼과 `..` 행을 지원하며 웹의 `--root` 범위를 유지합니다.
+- 분자 뷰어의 원소색·결합과 원자 표시를 개선했습니다. 오른쪽 분석 화면을 압축하고 표 머리글로 숫자 열을 오름차순/내림차순 정렬합니다.
+- Gaussian 입력을 작업·method/basis·전하/spin·메모리/core·checkpoint·title·추가 입력으로 구성하고 미리보기·저장합니다. 고급 Route 직접 입력과 SMILES conformer 입력을 유지합니다.
+- 기본 X11 실행과 선택적 웹 실행, 공통 분석 엔진은 그대로 사용합니다.
+
+웹 설정은 현재 브라우저의 localStorage에, X11 설정은 실행 기준 폴더의 `.gausslook-ui.json`에 저장합니다. 저장한 설정은 프로젝트 분석 수치와 별도입니다. 웹의 색상 테마와 분자 배경색은 각각 조절할 수 있습니다.
+
+## 주요 분석 흐름
 
 | 화면 | 사용 방법과 결과 |
 |---|---|
@@ -27,7 +37,7 @@ python GaussLook.py --web --port 8888
 
 `Demo`는 합성 예제, `Save project`는 `.glproj` 분석 snapshot, `XYZ`는 현재 구조 좌표, `Report JSON`은 선택 계산의 분석 수치 내보내기입니다. 도움말에 각각의 저장 범위와 사용법을 설명했습니다.
 
-최신 검증 버전은 항상 **main**에 반영하고 버전별 branch도 보관합니다. 이번 버전 branch는 `ver-1.1`입니다.
+최신 검증 버전은 항상 **main**에 반영하고 버전별 branch도 보관합니다. 이번 버전 branch는 `ver-1.2`입니다.
 
 ```bash
 git switch main

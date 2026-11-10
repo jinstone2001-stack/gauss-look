@@ -92,7 +92,8 @@ w.addEventListener("error", (e) => errors.push(e.message));
 w.eval(
   fs.readFileSync(path.join(root, "web/core.js"), "utf8") +
     "\n" +
-    fs.readFileSync(path.join(root, "web/app.js"), "utf8"),
+    fs.readFileSync(path.join(root, "web/app.js"), "utf8") +
+    "\nglobalThis.testTable = table;",
 );
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const click = (text) => {
@@ -199,6 +200,63 @@ async function until(fn) {
   await until(
     () => w.document.querySelectorAll("#panel tbody tr").length === 140,
   );
+  // A numeric sort must compare numbers and keep callbacks tied to source rows.
+  const sortResult = w.eval(`(() => {
+    const host = document.createElement("div");
+    let clicked = null;
+    const grid = testTable(host, ["value"], [[10], [-2], [null], [2]], i => { clicked = i; });
+    const heading = grid.querySelector("th button");
+    heading.click();
+    const ascending = [...grid.querySelectorAll("tbody tr")].map(r => r.dataset.originalIndex);
+    heading.click();
+    const descending = [...grid.querySelectorAll("tbody tr")].map(r => r.dataset.originalIndex);
+    grid.querySelector("tbody tr").click();
+    return JSON.stringify({ascending, descending, clicked});
+  })()`);
+  assert.deepEqual(JSON.parse(sortResult), {ascending:["1","3","0","2"], descending:["0","3","1","2"], clicked:0});
+  const language = w.document.getElementById("language");
+  language.value = "en";
+  language.dispatchEvent(new w.Event("change"));
+  await until(() => w.document.getElementById("demoBtn").textContent === "Demo");
+  assert.equal(w.document.documentElement.lang, "en");
+  assert.equal(JSON.parse(w.localStorage.getItem("gausslook.settings")).language, "en");
+  click("Overview");
+  assert(w.document.getElementById("panel").textContent.includes("Selected result:"));
+  assert.equal(w.document.querySelector("#jobs .active b").textContent, "DEMO · water (synthetic UI fixture)");
+  click("Vibrations · Spectra");
+  assert(w.document.getElementById("panel").textContent.includes("3 modes · 1 imaginary"));
+  w.document.getElementById("themeBtn").click();
+  assert.equal(w.document.documentElement.dataset.theme, "light");
+  click("Display settings");
+  assert(w.document.getElementById("modalBody").textContent.includes("Atom scale"));
+  click("Close");
+  click("Server folder");
+  await until(() => w.document.getElementById("browsePath"));
+  const folderPath = w.document.getElementById("browsePath");
+  folderPath.value = "docs";
+  folderPath.dispatchEvent(new w.KeyboardEvent("keydown", {key:"Enter", bubbles:true}));
+  await until(() => w.document.getElementById("browsePath") !== folderPath && w.document.getElementById("browsePath").value.endsWith("docs"));
+  assert([...w.document.querySelectorAll("#modalBody tbody tr")].some(r => r.firstElementChild.textContent === ".."));
+  click("↑ Parent folder");
+  await until(() => !w.document.getElementById("browsePath").value.endsWith("docs"));
+  click("Close");
+  click("Structure · Input");
+  assert(w.document.getElementById("panel").textContent.includes("SMILES"));
+  click("Build Gaussian input");
+  w.document.getElementById("input_title").value = "UI selected frame";
+  w.document.getElementById("input_memory").value = "8GB";
+  w.document.getElementById("input_cores").value = "8";
+  w.document.getElementById("generateInput").click();
+  await until(() => w.document.getElementById("inputPreview").value.includes("UI selected frame"));
+  const inputText = w.document.getElementById("inputPreview").value;
+  assert(inputText.startsWith("%mem=8GB\n%nprocshared=8\n%chk=gausslook.chk\n#p B3LYP/def2SVP Opt Freq"));
+  click("Close");
+  click("Help");
+  assert(w.document.querySelector(".help-content").textContent.includes("Language, theme"));
+  language.value = "ko";
+  language.dispatchEvent(new w.Event("change"));
+  await until(() => w.document.getElementById("demoBtn").textContent === "데모");
+  assert.equal(w.document.documentElement.lang, "ko");
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({

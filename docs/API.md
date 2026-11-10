@@ -1,6 +1,14 @@
 # 공통 분석 API
 
-1.1의 주요 UI는 아래 기능을 직접 제공합니다. 같은 수치를 API에서도 사용할 수 있습니다.
+1.2의 주요 UI는 아래 기능을 직접 제공합니다. 같은 수치를 API에서도 사용할 수 있습니다.
+
+`GET /api/browse?path=...`는 상대 경로 또는 `--root` 안의 절대 경로를 받습니다. 응답의 `path`는 상대 경로, `absolute_path`는 현재 경로, `root`는 허용 범위, `parent`는 상대 상위 경로이며 루트에서는 `null`입니다. `truncated=true`는 첫 1000개 항목만 반환했음을 뜻합니다. 파일·없는 폴더·루트 밖 경로는 거부합니다.
+
+```json
+{"action":"input","route":"#p B3LYP/def2SVP Opt Freq","charge":0,"multiplicity":1,"memory":"8GB","cores":8,"checkpoint":"result.chk","title":"Selected frame","additional":"","frame":0}
+```
+
+구조화 입력창은 이 공통 작업을 호출해 `{text, filename}`을 받습니다. `frame`은 0부터 시작하며 생략 시 마지막 구조입니다. 전자 수/spin과 core 범위, title/Link 0/Route의 줄바꿈을 검사합니다. 전문 Gaussian keyword·외부 Gen/ECP 블록의 계산 타당성을 완전히 검증하는 기능은 아닙니다.
 
 ```json
 {"action":"frame_analysis","frame":0}

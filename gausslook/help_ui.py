@@ -66,10 +66,12 @@ class Tooltip:
 
 def install_tooltips(parent, english=False):
     for widget in parent.winfo_children():
-        if isinstance(widget, (ttk.Button, ttk.Checkbutton)) and not hasattr(
-            widget, "_help_tooltip"
-        ):
-            widget._help_tooltip = Tooltip(widget, help_for_label(widget.cget("text"), english))
+        if isinstance(widget, (ttk.Button, ttk.Checkbutton)):
+            description = help_for_label(widget.cget("text"), english)
+            if hasattr(widget, "_help_tooltip"):
+                widget._help_tooltip.text = description
+            else:
+                widget._help_tooltip = Tooltip(widget, description)
         install_tooltips(widget, english)
 
 
@@ -78,9 +80,8 @@ class Manual(ttk.Frame):
         super().__init__(parent)
         self.english = english
         self.filtered = []
-        ttk.Label(self, text="Search help / 도움말 검색" if not english else "Search help").pack(
-            anchor="w"
-        )
+        self.search_label = ttk.Label(self, text="도움말 검색" if not english else "Search help")
+        self.search_label.pack(anchor="w")
         self.query = tk.StringVar()
         entry = ttk.Entry(self, textvariable=self.query)
         entry.pack(fill="x", pady=5)
@@ -95,6 +96,11 @@ class Manual(ttk.Frame):
         scroll.pack(side="right", fill="y")
         self.text.pack(fill="both", expand=True)
         self.query.trace_add("write", lambda *a: self.filter())
+        self.filter()
+
+    def set_language(self, english):
+        self.english = english
+        self.search_label.configure(text="Search help" if english else "도움말 검색")
         self.filter()
 
     def filter(self):

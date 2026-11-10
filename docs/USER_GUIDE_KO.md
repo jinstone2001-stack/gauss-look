@@ -1,6 +1,14 @@
-# GaussLook 1.1 사용자 도움말
+# GaussLook 1.2 사용자 도움말
 
-프로그램의 `도움말` 또는 F1에서 같은 내용을 검색할 수 있습니다. X11은 CJK font가 없으면 영문 도움말로 전환합니다.
+프로그램의 도움말 또는 F1에서 같은 내용을 검색할 수 있습니다. 한국어/English는 화면에서 선택합니다.
+
+## 언어·테마·화면 설정과 표 정렬
+
+설정에서 한국어/English, Dark/Light와 분자 표시를 선택합니다. 표 머리글은 숫자 값을 기준으로 정렬합니다.
+
+언어는 UI 설명을 바꾸며 Gaussian keyword, 원본 계산명, 수치와 단위는 유지합니다. 테마와 분자 배경색은 별도 설정입니다. 원자/결합 크기와 label은 표시만 바꾸며 좌표나 분석값은 바꾸지 않습니다. 표 머리글을 다시 누르면 오름차순/내림차순을 전환합니다. 정렬한 행을 선택해도 원래 MO/모드/원자와 연결됩니다. 서버 폴더의 경로 입력칸에 경로를 붙여넣고 Enter 또는 이동을 누르세요. '..'와 상위 폴더 버튼으로 되돌아갑니다. 웹에서는 --root 안의 폴더만 접근합니다. Gaussian 입력창에서 작업, method/basis, 전하/spin, Link 0, title과 추가 입력을 설정하고 미리보기 후 .gjf를 저장합니다. 고급 Route와 Gen/ECP 등 추가 입력은 사용자가 계산 조건을 확인해야 합니다. SMILES 입력은 계속 사용할 수 있습니다.
+
+관련 버튼: 설정, Settings, 서버 폴더, Server folder, Gaussian 입력, Gaussian input
 
 ## 처음 사용하기 · 필요한 파일
 
@@ -171,6 +179,27 @@ SMILES는 RDKit으로 conformer를 만들며 Gaussian 최적화 결과가 아닙
 
 화면의 각 버튼이 수행하는 동작과 저장 내용을 확인합니다.
 
+표시 설정 / Display settings / 설정 / Settings / 화면 설정
+언어·테마·글꼴과 분자 배경, 원소색, 원자/결합 크기를 조절하고 저장합니다. 계산 좌표와 분석값은 바뀌지 않습니다.
+
+Gaussian 입력 설정… / Gaussian input settings… / Gaussian 입력 생성 / Build Gaussian input
+Gaussian 계산 종류·method/basis·전하/spin·Link 0·추가 입력을 구성하는 창을 엽니다. SMILES로 만든 구조도 사용할 수 있습니다.
+
+입력 생성 / 갱신 / Generate / refresh input / Generate / update input
+선택 frame과 입력한 조건을 검사해 .gjf 미리보기를 갱신합니다. Gaussian 계산은 실행하지 않습니다.
+
+.gjf 다운로드 / Download .gjf / .gjf / .com 저장 / Save .gjf / .com
+현재 설정으로 입력을 다시 생성하고 .gjf 파일로 저장합니다. Gen/ECP 블록은 직접 확인하세요.
+
+이동 / Go
+입력하거나 붙여넣은 폴더 경로로 이동합니다. 웹에서는 --root 범위 안의 경로만 사용할 수 있습니다.
+
+상위 폴더 / ↑ Parent folder / .. ↑
+현재 폴더의 바로 위 폴더로 이동합니다. 웹 루트에서는 더 올라가지 않습니다.
+
+간편 설정 / Quick settings / 커스텀 설정 / Custom settings / 입력 미리보기 / Input preview
+Gaussian 입력의 기본 조건, 고급 Route/추가 입력, 생성된 입력 미리보기 사이를 전환합니다.
+
 파일 열기 / Open files
 log/chk/fchk/cube 또는 저장한 프로젝트를 엽니다. 웹에서는 PC 파일을 업로드합니다.
 
@@ -339,4 +368,4 @@ Hessian 동위원소 재분석
 지원 범위 / Feature status
 기획서의 140개 기능에 대한 구현 상태·입력 요건을 표시합니다.
 
-관련 버튼: 파일 열기, Open files, 서버 폴더, 상위 폴더, Demo, 데모, Reload source, 원본 새로고침, 새로고침, Save project, 프로젝트 저장, XYZ, XYZ 저장, Report JSON, 보고서 JSON, 분석 JSON 저장, JSON 저장, HTML 보고서, 설정, 표시 설정, Display settings, 적용, Apply, 도움말, Help, 닫기, Close, 작업 취소, Cancel task, 중심, Center, 번호, Labels, H, 선택 해제, Clear selection, PNG, ▶ 경로, Play path, 정지, Stop, 재생 중지, HOMO, HOMO 선택, LUMO, LUMO 선택, 선택 MO ±표면, Selected MO +/-, Render MO +/-, + 표면, + Surface, − 표면, - Surface, 숨기기, Hide, 표면 숨기기, cubegen, Gaussian cubegen으로 생성, cube 정보·적분, 로그·chk 연결, Link log + checkpoint, Imaginary만, Imaginary only, 재생, Play mode, 첫 imaginary mode 재생, 평형 구조, Equilibrium, 변위 벡터, Displacement vectors, ± XYZ, Mode XYZ, 모드 +변위 XYZ, 모드 -변위 XYZ, Plot, 스펙트럼 그리기, CSV, 현재 plot CSV 저장, Save plot CSV, SVG, Force 벡터, Force vectors, 에너지·Force CSV, Energy / Force CSV, 에너지 경로 그리기, Plot energy path, 분극률 CSV, Polar CSV, 전체 계산 조건 비교, 별도 보정 결과, RMSD 정렬 검사, 3D conformer 생성, SMILES → conformer (RDKit), SMILES to conformers (RDKit), Gaussian 입력 저장, Save Gaussian input, 선택 원자 삭제 → 새 구조, Delete selected / new model, 선택 원자 이동 → 새 구조, 원본 출력, Source output, 원본 출력 첫 500행, 원문 구간 보기, Hessian 동위원소 재분석, 실행, Run, 분석 실행, 지원 범위, Feature status
+관련 버튼: 표시 설정, Display settings, 설정, Settings, 화면 설정, Gaussian 입력 설정…, Gaussian input settings…, Gaussian 입력 생성, Build Gaussian input, 입력 생성 / 갱신, Generate / refresh input, Generate / update input, .gjf 다운로드, Download .gjf, .gjf / .com 저장, Save .gjf / .com, 이동, Go, 상위 폴더, ↑ Parent folder, .. ↑, 간편 설정, Quick settings, 커스텀 설정, Custom settings, 입력 미리보기, Input preview, 파일 열기, Open files, 서버 폴더, 상위 폴더, Demo, 데모, Reload source, 원본 새로고침, 새로고침, Save project, 프로젝트 저장, XYZ, XYZ 저장, Report JSON, 보고서 JSON, 분석 JSON 저장, JSON 저장, HTML 보고서, 설정, 표시 설정, Display settings, 적용, Apply, 도움말, Help, 닫기, Close, 작업 취소, Cancel task, 중심, Center, 번호, Labels, H, 선택 해제, Clear selection, PNG, ▶ 경로, Play path, 정지, Stop, 재생 중지, HOMO, HOMO 선택, LUMO, LUMO 선택, 선택 MO ±표면, Selected MO +/-, Render MO +/-, + 표면, + Surface, − 표면, - Surface, 숨기기, Hide, 표면 숨기기, cubegen, Gaussian cubegen으로 생성, cube 정보·적분, 로그·chk 연결, Link log + checkpoint, Imaginary만, Imaginary only, 재생, Play mode, 첫 imaginary mode 재생, 평형 구조, Equilibrium, 변위 벡터, Displacement vectors, ± XYZ, Mode XYZ, 모드 +변위 XYZ, 모드 -변위 XYZ, Plot, 스펙트럼 그리기, CSV, 현재 plot CSV 저장, Save plot CSV, SVG, Force 벡터, Force vectors, 에너지·Force CSV, Energy / Force CSV, 에너지 경로 그리기, Plot energy path, 분극률 CSV, Polar CSV, 전체 계산 조건 비교, 별도 보정 결과, RMSD 정렬 검사, 3D conformer 생성, SMILES → conformer (RDKit), SMILES to conformers (RDKit), Gaussian 입력 저장, Save Gaussian input, 선택 원자 삭제 → 새 구조, Delete selected / new model, 선택 원자 이동 → 새 구조, 원본 출력, Source output, 원본 출력 첫 500행, 원문 구간 보기, Hessian 동위원소 재분석, 실행, Run, 분석 실행, 지원 범위, Feature status

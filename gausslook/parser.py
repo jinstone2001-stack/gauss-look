@@ -765,13 +765,24 @@ def parse_input(text, name, source):
         lines = part.splitlines()
         route = []
         xyz = []
+        # Charge/multiplicity follows the complete title section. A numeric
+        # title such as "0 1" is valid and must not be mistaken for this record.
+        route_start = next((i for i, line in enumerate(lines) if line.strip().startswith("#")), None)
+        coordinate_start = None
+        if route_start is not None:
+            cursor = route_start
+            while cursor < len(lines) and lines[cursor].strip():
+                route.append(lines[cursor].strip())
+                cursor += 1
+            while cursor < len(lines) and not lines[cursor].strip():
+                cursor += 1
+            while cursor < len(lines) and lines[cursor].strip():
+                cursor += 1
+            while cursor < len(lines) and not lines[cursor].strip():
+                cursor += 1
+            coordinate_start = cursor
         for i, line in enumerate(lines):
-            if line.strip().startswith("#"):
-                j = i
-                while j < len(lines) and lines[j].strip():
-                    route.append(lines[j].strip())
-                    j += 1
-            if re.match(r"^\s*-?\d+\s+\d+\s*$", line):
+            if i == coordinate_start and re.match(r"^\s*-?\d+\s+\d+\s*$", line):
                 c.charge, c.multiplicity = map(int, line.split())
                 for row in lines[i + 1 :]:
                     if not row.strip():

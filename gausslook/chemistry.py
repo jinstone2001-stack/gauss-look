@@ -108,6 +108,7 @@ def gaussian_input(
     checkpoint="molecule.chk",
     additional="",
     frame=-1,
+    title="GaussLook generated structure",
 ):
     from .model import ELEMENTS
 
@@ -116,22 +117,26 @@ def gaussian_input(
     if q is None or m is None:
         raise ValueError("전하와 다중도를 지정하세요.")
     n = sum(c.atoms) - q
-    if m < 1 or n < 0 or (n - (m - 1)) % 2:
+    if m < 1 or n < m - 1 or (n - (m - 1)) % 2:
         raise ValueError("전자 수와 spin multiplicity의 짝·홀수가 맞지 않습니다.")
     if not c.frames:
         raise ValueError("구조 좌표가 없습니다.")
     if not 1 <= int(cores) <= 4096:
         raise ValueError("core 수는 1~4096이어야 합니다.")
-    for label, value in [("memory", memory), ("checkpoint", checkpoint)]:
+    for label, value in [("memory", memory), ("checkpoint", checkpoint), ("title", title)]:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(label + " 값을 입력하세요. / Value is required.")
         if "\n" in value or "\r" in value:
             raise ValueError(label + "에는 줄바꿈을 사용할 수 없습니다.")
+    if not isinstance(route, str) or not route.strip() or "\n" in route or "\r" in route:
+        raise ValueError("Route를 한 줄로 입력하세요. / Enter a one-line route.")
     if not route.lstrip().startswith("#"):
         route = "#p " + route
     geom = "\n".join(
         f"{ELEMENTS[z]} {x:.9f} {y:.9f} {v:.9f}"
         for z, (x, y, v) in zip(c.atoms, c.frames[frame]["coords"])
     )
-    return f"%mem={memory}\n%nprocshared={int(cores)}\n%chk={checkpoint}\n{route}\n\nGaussLook generated structure\n\n{q} {m}\n{geom}\n\n{additional.rstrip()}\n\n"
+    return f"%mem={memory}\n%nprocshared={int(cores)}\n%chk={checkpoint}\n{route}\n\n{title}\n\n{q} {m}\n{geom}\n\n{additional.rstrip()}\n\n"
 
 
 def isotope_modes(path, masses):

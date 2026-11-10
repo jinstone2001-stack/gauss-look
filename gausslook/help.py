@@ -2,6 +2,16 @@
 
 TOPICS = [
     {
+        "id": "workspace-v12",
+        "title_ko": "언어·테마·화면 설정과 표 정렬",
+        "title_en": "Language, theme, display settings and table sorting",
+        "summary_ko": "설정에서 한국어/English, Dark/Light와 분자 표시를 선택합니다. 표 머리글은 숫자 값을 기준으로 정렬합니다.",
+        "summary_en": "Choose Korean/English, Dark/Light and molecular display settings. Click table headings to sort numeric values.",
+        "body_ko": "언어는 UI 설명을 바꾸며 Gaussian keyword, 원본 계산명, 수치와 단위는 유지합니다. 테마와 분자 배경색은 별도 설정입니다. 원자/결합 크기와 label은 표시만 바꾸며 좌표나 분석값은 바꾸지 않습니다. 표 머리글을 다시 누르면 오름차순/내림차순을 전환합니다. 정렬한 행을 선택해도 원래 MO/모드/원자와 연결됩니다. 서버 폴더의 경로 입력칸에 경로를 붙여넣고 Enter 또는 이동을 누르세요. '..'와 상위 폴더 버튼으로 되돌아갑니다. 웹에서는 --root 안의 폴더만 접근합니다. Gaussian 입력창에서 작업, method/basis, 전하/spin, Link 0, title과 추가 입력을 설정하고 미리보기 후 .gjf를 저장합니다. 고급 Route와 Gen/ECP 등 추가 입력은 사용자가 계산 조건을 확인해야 합니다. SMILES 입력은 계속 사용할 수 있습니다.",
+        "body_en": "Language changes UI prose while preserving Gaussian keywords, original calculation names, values and units. Theme and molecular background are separate settings. Atom/bond sizes and labels change display only. Click a heading again to toggle ascending/descending order; sorted rows keep their original MO/mode/atom identity. Paste a directory path and press Enter or Go. Both '..' and the parent button navigate upward. Web browsing stays inside --root. In Gaussian input, choose the job, method/basis, charge/spin, Link 0, title and additional input, then preview and save .gjf. Review advanced Route and Gen/ECP blocks for your calculation. SMILES input remains available.",
+        "buttons": ["설정", "Settings", "서버 폴더", "Server folder", "Gaussian 입력", "Gaussian input"],
+    },
+    {
         "id": "start",
         "title_ko": "처음 사용하기 · 필요한 파일",
         "title_en": "Getting started / required files",
@@ -546,6 +556,15 @@ CONTROL_GROUPS = [
         "View implementation status and requirements for the 140 planned features.",
     ),
 ]
+CONTROL_GROUPS = [
+    (["표시 설정", "Display settings", "설정", "Settings", "화면 설정"], "언어·테마·글꼴과 분자 배경, 원소색, 원자/결합 크기를 조절하고 저장합니다. 계산 좌표와 분석값은 바뀌지 않습니다.", "Choose and save language, theme, fonts, background, element colors and atom/bond sizes. Coordinates and analysis values are unchanged."),
+    (["Gaussian 입력 설정…", "Gaussian input settings…", "Gaussian 입력 생성", "Build Gaussian input"], "Gaussian 계산 종류·method/basis·전하/spin·Link 0·추가 입력을 구성하는 창을 엽니다. SMILES로 만든 구조도 사용할 수 있습니다.", "Open the Gaussian job, method/basis, charge/spin, Link 0 and additional-input form. SMILES structures can also be used."),
+    (["입력 생성 / 갱신", "Generate / refresh input", "Generate / update input"], "선택 frame과 입력한 조건을 검사해 .gjf 미리보기를 갱신합니다. Gaussian 계산은 실행하지 않습니다.", "Validate the selected frame and input conditions, then update the .gjf preview. Gaussian is not executed."),
+    ([".gjf 다운로드", "Download .gjf", ".gjf / .com 저장", "Save .gjf / .com"], "현재 설정으로 입력을 다시 생성하고 .gjf 파일로 저장합니다. Gen/ECP 블록은 직접 확인하세요.", "Regenerate the current settings and save the Gaussian input. Review any Gen/ECP blocks yourself."),
+    (["이동", "Go"], "입력하거나 붙여넣은 폴더 경로로 이동합니다. 웹에서는 --root 범위 안의 경로만 사용할 수 있습니다.", "Navigate to the typed or pasted directory. Web paths must remain within --root."),
+    (["상위 폴더", "↑ Parent folder", ".. ↑"], "현재 폴더의 바로 위 폴더로 이동합니다. 웹 루트에서는 더 올라가지 않습니다.", "Navigate to the parent directory. Web browsing cannot move above its root."),
+    (["간편 설정", "Quick settings", "커스텀 설정", "Custom settings", "입력 미리보기", "Input preview"], "Gaussian 입력의 기본 조건, 고급 Route/추가 입력, 생성된 입력 미리보기 사이를 전환합니다.", "Switch between Gaussian basic settings, advanced Route/additional blocks and the generated input preview."),
+] + CONTROL_GROUPS
 CONTROLS = [
     {"labels": labels, "summary_ko": ko, "summary_en": en} for labels, ko, en in CONTROL_GROUPS
 ]
@@ -567,7 +586,7 @@ TOPICS.append(
 
 
 def help_payload():
-    return {"version": "1.1.0", "topics": TOPICS, "controls": CONTROLS}
+    return {"version": "1.2.0", "topics": TOPICS, "controls": CONTROLS}
 
 
 def help_for_label(label, english=False):

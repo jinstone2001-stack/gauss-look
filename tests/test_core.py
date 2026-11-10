@@ -1,4 +1,4 @@
-import json, threading, urllib.request, urllib.error
+import json, os, sys, threading, urllib.request, urllib.error
 from pathlib import Path
 import numpy as np
 import pytest
@@ -267,18 +267,34 @@ def test_web_routes_project_and_cross_origin(engine):
         thread.join()
 
 
+def python_utility(tmp_path, name, source):
+    """Exercise the real adapter with a portable stand-in executable."""
+    script = tmp_path / (name + ".py")
+    script.write_text(source, encoding="utf-8")
+    if os.name == "nt":
+        # Let cmd expand its own Unicode script directory rather than embedding
+        # a localized temporary path in the batch file's code page.
+        exe = tmp_path / (name + ".cmd")
+        python = getattr(sys, "_base_executable", sys.executable)
+        exe.write_text(f'@echo off\n"{python}" "%~dp0{name}.py" %*\n', encoding="utf-8")
+    else:
+        exe = script
+        exe.write_text("#!" + sys.executable + "\n" + source, encoding="utf-8")
+        exe.chmod(0o755)
+    return exe
+
+
 def test_formchk_adapter_preserves_original(engine, tmp_path):
-    import os
 
     fixture = tmp_path / "reference.fchk"
     fixture.write_text(fchk_text())
-    exe = tmp_path / "fake_formchk"
-    exe.write_text(
-        "#!/usr/bin/env python3\nimport shutil,sys\nshutil.copyfile("
+    exe = python_utility(
+        tmp_path,
+        "fake_formchk",
+        "import shutil,sys\nshutil.copyfile("
         + repr(str(fixture))
         + ",sys.argv[2])\n"
     )
-    exe.chmod(0o755)
     engine.utilities["formchk"] = str(exe)
     original = tmp_path / "original.chk"
     original.write_bytes(b"ORIGINAL BINARY CHECKPOINT")
@@ -287,9 +303,9 @@ def test_formchk_adapter_preserves_original(engine, tmp_path):
 
 
 def test_utility_failure_is_not_success(engine, tmp_path):
-    exe = tmp_path / "bad_utility"
-    exe.write_text('#!/usr/bin/env python3\nimport sys\nprint("utility failed")\nsys.exit(2)\n')
-    exe.chmod(0o755)
+    exe = python_utility(
+        tmp_path, "bad_utility", 'import sys\nprint("utility failed")\nsys.exit(2)\n'
+    )
     engine.utilities["formchk"] = str(exe)
     with pytest.raises(ValueError, match="utility failed"):
         engine.utility("formchk", [], {"cancel": False})

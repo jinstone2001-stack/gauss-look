@@ -9,6 +9,7 @@ import numpy as np
 from .analysis import orbital_analysis, frame_analysis, polarizability_analysis
 from .model import ELEMENTS, HARTREE_EV, BOHR_ANG
 from .help_ui import Manual
+from .native_appearance import install_sorting
 
 
 class CorePanels:
@@ -98,6 +99,7 @@ class CorePanels:
         tree.configure(yscrollcommand=scroll.set)
         scroll.pack(side="right", fill="y")
         tree.pack(side="left", fill="both", expand=True)
+        install_sorting(tree)
         return tree
 
     def build_vibration_panel(self, f):
