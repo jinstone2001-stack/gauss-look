@@ -1,4 +1,4 @@
-# GaussLook 1.0
+# GaussLook 1.1
 
 Gaussian 16 결과 분석 프로그램입니다. **하나의 Python 분석 엔진을 X11 GUI와 웹 GUI가 공유**합니다.
 
@@ -7,7 +7,35 @@ python GaussLook.py
 python GaussLook.py --web --port 8888
 ```
 
-원래 작성한 [구축 기획서](docs/Gaussian16_Analysis_Studio_Planning_KO.md)와 [31쪽 PDF](docs/Gaussian16_Analysis_Studio_Planning_KO.pdf)를 포함합니다. 기획의 전체 범위와 현재 구현을 구분한 [140개 기능 상태표](docs/FEATURE_STATUS.md)를 제공합니다. **GaussView의 모든 기능을 완전히 대체한 버전은 아닙니다.** 일상적인 Gaussian 결과 분석과 공통 엔진을 구현한 첫 배포입니다.
+원래 작성한 [구축 기획서](docs/Gaussian16_Analysis_Studio_Planning_KO.md)와 [31쪽 PDF](docs/Gaussian16_Analysis_Studio_Planning_KO.pdf)를 포함합니다. 기획의 전체 범위와 현재 구현을 구분한 [140개 기능 상태표](docs/FEATURE_STATUS.md)를 제공합니다. [내장 도움말의 문서판](docs/USER_GUIDE_KO.md)도 포함합니다.
+
+1.1에서는 **MO/HOMO/LUMO, 진동·허수 모드, 구조별 에너지·Force, 분극률**을 전용 화면에서 분석합니다. `Full title (5/4)` 오류를 일으키던 fchk 문자열 배열을 Gaussian 고정 폭 형식으로 읽도록 수정했습니다. GaussView 전체 기능을 완전히 대체하는 버전은 아닙니다.
+
+## 1.1의 주요 분석 흐름
+
+| 화면 | 사용 방법과 결과 |
+|---|---|
+| MO·표면 | spin별 HOMO/LUMO 선택, eV/Hartree·점유수·gap 표와 클릭 가능한 에너지 diagram. `선택 MO ±표면`으로 두 위상을 함께 표시 |
+| 진동·분광 | 음의 진동수를 빨간색으로 표시하고 imaginary만 필터. 각 모드 행을 선택해 기준 구조에서 재생, 속도·진폭·변위 화살표 조절, 평형 구조 복원, ±변위 XYZ 저장 |
+| 에너지·Force | frame별 에너지 종류·Hartree/eV, 원자별 Fx/Fy/Fz·크기, Cartesian max/RMS, Gaussian 수렴 기준, Force 화살표와 전체 CSV |
+| 분극률 | 출처·응답 주파수별 3×3 tensor, 등방 평균 a.u./Å³, 비등방성·고유값, CSV |
+| 도움말 / F1 | 네트워크 없이 설명 검색. 모든 작업 버튼에 마우스를 올리면 개별 기능 설명 표시 |
+
+`.log`와 **같은 계산의** `.chk/.fchk`를 모두 열고 로그의 `로그·chk 연결`을 사용하면 한 항목에서 분석할 수 있습니다. 원자 순서·최종 구조·전하·spin을 검사하고 checkpoint 좌표계로 정렬합니다. method/basis/전자 상태도 원본에서 확인하세요. 원자별 Force가 로그에 없으면 연결된 checkpoint의 현재 Gradient를 사용할 수 있지만, 과거 step의 Force를 만들어내지는 않습니다.
+
+표면 생성에는 Gaussian의 **formchk/cubegen 환경**이 필요합니다. MO 에너지만 있는 log는 표·diagram 분석을 지원하며 파동함수 표면은 생성하지 않습니다. 실행 중인 로그의 변화는 `Reload source`로 다시 읽습니다. `.chk` 항목을 새로 읽으면 원본 chk에서 재변환합니다.
+
+`Demo`는 합성 예제, `Save project`는 `.glproj` 분석 snapshot, `XYZ`는 현재 구조 좌표, `Report JSON`은 선택 계산의 분석 수치 내보내기입니다. 도움말에 각각의 저장 범위와 사용법을 설명했습니다.
+
+최신 검증 버전은 항상 **main**에 반영하고 버전별 branch도 보관합니다. 이번 버전 branch는 `ver-1.1`입니다.
+
+```bash
+git switch main
+git pull --ff-only
+python -m pip install -r requirements.txt
+python GaussLook.py result.log result.chk
+python GaussLook.py --web --port 8888 result.log result.chk
+```
 
 ## 설치
 
@@ -74,7 +102,7 @@ MobaXterm의 **Tunneling → New SSH tunnel → Local port forwarding**에서 �
 
 - `.log/.out`의 작업 분리, 부분 로그 읽기, 구조·최적화 프레임, 에너지 종류·수렴 기준, 정상 종료/SCF/기하 수렴의 분리 표시.
 - cclib 보완 parser를 통한 MPn/CC 결과·전하·원자 spin·MO·일부 NMR/전자전이 속성 읽기. 원문 행 번호는 전체 파일 기준으로 보존합니다.
-- `.fchk/.fch`의 구조·MO 에너지/점유·전하·dipole·분극률·저장된 모드. checkpoint만으로 정상 종료를 판정하지 않습니다.
+- `.fchk/.fch`의 고정 폭 문자열·숫자·logical 배열, 구조·MO 에너지/점유·전하·dipole·분극률·저장된 모드·Cartesian Gradient. checkpoint의 Total Energy를 보존하며 정상 종료 여부는 추정하지 않습니다.
 - 진동수·imaginary 모드 표, 모드 재생, ±변위 XYZ 저장, IR/Raman/VCD, UV-Vis/ECD, 기준 shielding을 지정한 NMR sticks와 broadening.
 - Raman activity→상대강도 변환의 레이저 파장·온도, 주파수 배율·Gaussian/Lorentzian 선폭. 원시 값은 유지합니다.
 - Gaussian cube의 여러 field·비직교 축·단위 읽기, ±등치면, field 정보/적분, 같은 격자의 scale/square/add/subtract.
@@ -97,7 +125,7 @@ python GaussLook.py --gaussian-dir /path/to/g16
 ```
 
 - `.chk` 열기: 원본을 복사한 뒤 `formchk`로 변환합니다. 원본 chk는 변경하지 않습니다.
-- `MO·표면`: fchk를 선택하고 MO 번호·spin 또는 density/ESP/spin을 지정해 `cubegen` 작업을 실행합니다.
+- `MO·표면`: HOMO/LUMO 또는 임의 MO·spin·격자·등치값을 선택하고 `선택 MO ±표면`을 누릅니다. 생성된 cube는 같은 격자 요청에 재사용합니다. density/ESP/spin cube 생성은 같은 화면의 Cube 도구를 사용합니다.
 - `formchk/cubegen`의 반환 코드·오류·결과 파일을 검사합니다. 생성이 실패하면 정상 결과처럼 표시하지 않습니다.
 - Gaussian 실행 파일·라이선스는 포함하지 않습니다. 이 개발 환경에는 실제 utility가 없어 **실제 Gaussian 실행 검증은 수행하지 못했습니다**. adapter의 성공/실패 처리는 별도 시험으로 검증합니다.
 - 장시간 SCF/Opt 계산 제출, SLURM/PBS job manager, 자동 재시작은 이번 버전에 포함하지 않았습니다. 생성한 `.gjf`를 기존 계산 절차로 실행하세요.

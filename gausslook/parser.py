@@ -31,10 +31,21 @@ def parse_log(text, name, source):
         offset = text[: max(0, start)].count("\n")
         calc = _parse_section(chunk, f"{name} / job {len(result)+1}", source)
         for record in (
-            calc.frames + calc.energies + calc.modes + calc.convergence + calc.transitions
+            calc.frames
+            + calc.energies
+            + calc.modes
+            + calc.convergence
+            + calc.transitions
+            + calc.force_records
         ):
             if record.get("line") is not None:
                 record["line"] += offset
+        for record in calc.properties.get("polarizability_records", []):
+            if record.get("line") is not None:
+                record["line"] += offset
+        for record in calc.force_records:
+            if record.get("input_geometry_line") is not None:
+                record["input_geometry_line"] += offset
         result.append(calc)
     if not result:
         raise ValueError(
@@ -84,6 +95,33 @@ def _parse_section(text, name, source):
     if charge:
         c.charge, c.multiplicity = map(int, charge.groups())
     for i, line in enumerate(lines):
+        electron_counts = re.search(r"(\d+)\s+alpha electrons\s+(\d+)\s+beta electrons", line)
+        if electron_counts:
+            c.properties["alpha_electrons"], c.properties["beta_electrons"] = map(
+                int, electron_counts.groups()
+            )
+        if re.search(r"Forces\s*\(Hartrees/Bohr\)", line, re.I):
+            force_rows = []
+            for offset, row in enumerate(lines[i + 1 :]):
+                cells = row.split()
+                if len(cells) == 5 and cells[0].isdigit() and cells[1].lstrip("-").isdigit():
+                    values = nums(" ".join(cells[2:]))
+                    if len(values) != 3:
+                        break
+                    force_rows.append(values)
+                elif force_rows:
+                    break
+                elif offset >= 4:
+                    break
+            if force_rows:
+                c.force_records.append(
+                    {
+                        "forces_hartree_bohr": force_rows,
+                        "line": i + 1,
+                        "source": "Gaussian Cartesian force table",
+                        "coordinate_system": "as printed in log",
+                    }
+                )
         if re.search(r"(?:Standard|Input|Z-Matrix) orientation:", line):
             j = i + 1
             dashes = 0
@@ -113,7 +151,10 @@ def _parse_section(text, name, source):
         patterns = [
             ("MP2", r"EUMP2\s*=\s*(" + FLOAT + ")"),
             ("CCSD(T)", r"CCSD\(T\)\s*=\s*(" + FLOAT + ")"),
-            ("CCSD", r"E\(CORR\)\s*=\s*(" + FLOAT + ")"),
+            (
+                "CCD" if re.search(r"\bccd\b", c.route, re.I) else "CCSD",
+                r"E\([Cc][Oo][Rr][Rr]\)\s*=\s*(" + FLOAT + ")",
+            ),
             ("ONIOM", r"ONIOM: extrapolated energy\s*=\s*(" + FLOAT + ")"),
             ("Excited total", r"Total Energy, E\([^)]*\)\s*=\s*(" + FLOAT + ")"),
             ("Composite", r"G[234]\([^)]*\)\s*=\s*(" + FLOAT + ")"),
@@ -212,6 +253,62 @@ def _parse_section(text, name, source):
                     [v[1], v[2], v[4]],
                     [v[3], v[4], v[5]],
                 ]
+                c.properties.setdefault("polarizability_records", []).append(
+                    {
+                        "tensor_au": c.properties["polarizability_au"],
+                        "frequency_au": 0.0,
+                        "line": i + 1,
+                        "source": "Exact polarizability (printed precision)",
+                        "orientation": "as printed",
+                    }
+                )
+        if re.match(r"\s*Polarizability\s*=", line):
+            values = nums(line.split("=", 1)[1])
+            j = i + 1
+            while len(values) < 6 and j < len(lines) and j < i + 4:
+                if re.search(r"[A-CF-Za-cf-z]", re.sub(r"[DEde][-+]?\d+", "", lines[j])):
+                    break
+                values += nums(lines[j])
+                j += 1
+            if len(values) == 6:
+                a = values
+                tensor = [[a[0], a[1], a[3]], [a[1], a[2], a[4]], [a[3], a[4], a[5]]]
+                c.properties["polarizability_au"] = tensor
+                c.properties.setdefault("polarizability_records", []).append(
+                    {
+                        "tensor_au": tensor,
+                        "frequency_au": 0.0,
+                        "line": i + 1,
+                        "source": "Gaussian polarizability archive (higher precision)",
+                        "orientation": "as printed",
+                    }
+                )
+        if "SCF Polarizability for W=" in line:
+            tensor = np.zeros((3, 3))
+            seen = set()
+            for row in lines[i + 1 : i + 12]:
+                values = nums(row)
+                if values and values[0] in (1, 2, 3) and len(values) in (int(values[0]) + 1, 4):
+                    k = int(values[0]) - 1
+                    for col, value in enumerate(values[1:]):
+                        tensor[k, col] = value
+                        tensor[col, k] = value
+                    seen.add(k)
+                    if len(seen) == 3:
+                        break
+            if len(seen) == 3:
+                frequency = nums(line.split("W=", 1)[1])[0]
+                c.properties.setdefault("polarizability_records", []).append(
+                    {
+                        "tensor_au": tensor.tolist(),
+                        "frequency_au": frequency,
+                        "line": i + 1,
+                        "source": "SCF response polarizability",
+                        "orientation": "as printed",
+                    }
+                )
+                if abs(frequency) < 1e-12:
+                    c.properties["polarizability_au"] = tensor.tolist()
         m = re.search(r"S\*\*2 before annihilation\s*(" + FLOAT + r")", line)
         if m:
             c.properties["s2_before"] = nums(m[1])[0]
@@ -297,6 +394,40 @@ def _parse_section(text, name, source):
                 "step": k + 1,
             }
         )
+        candidates = [
+            j
+            for j, record in enumerate(c.force_records)
+            if g["line"] <= record["line"] < end
+            and len(record["forces_hartree_bohr"]) == len(g["atoms"])
+        ]
+        if candidates:
+            c.frames[-1]["force_record"] = candidates[-1]
+            record = c.force_records[candidates[-1]]
+            # Gaussian Cartesian forces use input axes; the preferred viewer geometry
+            # is usually standard orientation. Rotate vectors, never their magnitudes.
+            inputs = [
+                v
+                for v in geometries
+                if not v["standard"] and v["line"] <= g["line"] and v["atoms"] == g["atoms"]
+            ]
+            if g["standard"] and inputs:
+                raw = np.asarray(inputs[-1]["coords"])
+                target = np.asarray(g["coords"])
+                a = raw - raw.mean(0)
+                b = target - target.mean(0)
+                u, _, vt = np.linalg.svd(a.T @ b)
+                rotation = u @ np.diag([1, 1, np.linalg.det(u @ vt)]) @ vt
+                rmsd = float(np.sqrt(np.mean(np.sum((a @ rotation - b) ** 2, axis=1))))
+                if rmsd < 0.0001:
+                    record["raw_forces_hartree_bohr"] = record["forces_hartree_bohr"]
+                    record["forces_hartree_bohr"] = (
+                        np.asarray(record["forces_hartree_bohr"]) @ rotation
+                    ).tolist()
+                    record["coordinate_system"] = "standard orientation (rotated from input axes)"
+                    record["input_geometry_line"] = inputs[-1]["line"]
+                    record["orientation_rmsd_A"] = rmsd
+        if es:
+            c.frames[-1]["energy_kind"] = es[-1]["kind"]
     if preferred:
         c.atoms = preferred[-1]["atoms"]
     # Canonical alpha/beta occupations for unrestricted output are one electron each.
@@ -304,6 +435,25 @@ def _parse_section(text, name, source):
         for o in c.orbitals.values():
             o["occupations"] = [min(1, v) for v in o["occupations"]]
     _cclib_enrich(c, text)
+    for mode in c.modes:
+        preceding = [
+            k
+            for k, f in enumerate(c.frames)
+            if f.get("line", 0) <= mode.get("line", len(lines) + 1)
+        ]
+        mode["reference_frame"] = preceding[-1] if preceding else max(0, len(c.frames) - 1)
+    if (
+        len(c.orbitals) == 1
+        and c.properties.get("alpha_electrons") is not None
+        and c.properties.get("beta_electrons") is not None
+    ):
+        na, nb = c.properties["alpha_electrons"], c.properties["beta_electrons"]
+        o = next(iter(c.orbitals.values()))
+        o["occupations"] = [
+            2 if k < min(na, nb) else 1 if k < max(na, nb) else 0
+            for k in range(len(o["energies_eV"]))
+        ]
+        o["representation"] = "spatial orbitals (restricted/open-shell as applicable)"
     if c.status["termination"] == "incomplete":
         c.warnings.append("미완성/실행 중 로그: 마지막 구조와 결과가 최종값이 아닐 수 있습니다.")
     if "Anharmonic" in text or "Duschinsky" in text:
@@ -320,6 +470,7 @@ def _cclib_enrich(c, text):
     try:
         import io, logging
         from cclib.parser import Gaussian
+        from cclib.parser.utils import convertor
 
         d = Gaussian(io.StringIO(text), loglevel=logging.CRITICAL).parse()
         c.properties["parser"] = "GaussLook + cclib"
@@ -361,22 +512,37 @@ def _cclib_enrich(c, text):
             }
         if hasattr(d, "moenergies"):
             for i, ev in enumerate(d.moenergies):
+                if c.orbitals.get(["alpha", "beta"][i], {}).get("energies_eV"):
+                    continue
                 ne = int(d.homos[i]) + 1
                 factor = 1 if len(d.moenergies) == 2 else 2
                 c.orbitals[["alpha", "beta"][i]] = {
                     "energies_eV": ev.tolist(),
                     "occupations": [factor if k < ne else 0 for k in range(len(ev))],
                 }
-        if hasattr(d, "mpenergies"):
+        if hasattr(d, "mpenergies") and not any(
+            e["kind"] in ("CCD", "CCSD", "CCSD(T)", "Composite", "ONIOM", "Excited total")
+            for e in c.energies
+        ):
             for order, value in enumerate(d.mpenergies[-1], 2):
-                c.energies.append(
-                    {"kind": "MP" + str(order), "hartree": float(value / HARTREE_EV), "line": None}
-                )
-        if hasattr(d, "ccenergies") and len(d.ccenergies):
+                kind = "MP" + str(order)
+                if not any(e["kind"] == kind for e in c.energies):
+                    c.energies.append(
+                        {
+                            "kind": kind,
+                            "hartree": float(convertor(value, "eV", "hartree")),
+                            "line": None,
+                        }
+                    )
+        if (
+            hasattr(d, "ccenergies")
+            and len(d.ccenergies)
+            and not any(e["kind"] in ("CCD", "CCSD", "CCSD(T)") for e in c.energies)
+        ):
             c.energies.append(
                 {
                     "kind": "CC (cclib final)",
-                    "hartree": float(d.ccenergies[-1] / HARTREE_EV),
+                    "hartree": float(convertor(d.ccenergies[-1], "eV", "hartree")),
                     "line": None,
                 }
             )
@@ -398,6 +564,9 @@ def _cclib_enrich(c, text):
         c.properties["cclib_fallback_reason"] = type(exc).__name__
 
 
+FCHK_HEADER = re.compile(r"^(.{40}) {3}([IRCHL])\s+(?:N=\s*(\d+)\s*|(.*))$")
+
+
 def fchk_records(text):
     lines = text.splitlines()
     r = {}
@@ -405,7 +574,7 @@ def fchk_records(text):
     while i < len(lines):
         line = lines[i]
         i += 1
-        m = re.match(r"^(.{1,43}?)\s+([IRCL])\s+(?:N=\s*(\d+)|(.*))$", line)
+        m = FCHK_HEADER.match(line)
         if not m:
             continue
         key, typ, count, scalar = m.groups()
@@ -413,17 +582,48 @@ def fchk_records(text):
         if count:
             n = int(count)
             v = []
+            if typ in ("C", "H"):
+                width, per_line = (12, 5) if typ == "C" else (8, 9)
+                while len(v) < n:
+                    if i >= len(lines) or FCHK_HEADER.match(lines[i]):
+                        raise ValueError(f"fchk 문자열 배열이 잘렸습니다: {key}")
+                    row = lines[i]
+                    i += 1
+                    take = min(per_line, n - len(v))
+                    if row[take * width :].strip():
+                        raise ValueError(f"fchk 문자열 레코드 폭 오류: {key}")
+                    row = row.ljust(take * width)
+                    v.extend(row[j * width : (j + 1) * width] for j in range(take))
+                r[key] = v
+                continue
             while len(v) < n and i < len(lines):
+                if FCHK_HEADER.match(lines[i]):
+                    break
                 if typ in ("R", "I"):
+                    tokens = lines[i].split()
+                    if any(re.fullmatch(FLOAT, t) is None for t in tokens):
+                        # Full-width negative E16.8 fields may touch without a space.
+                        width = 16 if typ == "R" else 12
+                        row = lines[i]
+                        tokens = [row[j : j + width].strip() for j in range(0, len(row), width)]
+                        if any(re.fullmatch(FLOAT, t) is None for t in tokens):
+                            raise ValueError(f"fchk 숫자 배열 형식 오류: {key}")
                     v += nums(lines[i])
                 else:
-                    v += lines[i].split()
+                    flags = "".join(lines[i].split()).replace(".", "").upper()
+                    if any(t not in "TF" for t in flags):
+                        raise ValueError(f"fchk logical 배열 형식 오류: {key}")
+                    v += [t == "T" for t in flags]
                 i += 1
             if len(v) != n:
                 raise ValueError(f"fchk 배열 길이 불일치: {key} ({len(v)}/{n})")
             r[key] = v
         else:
-            v = nums(scalar or "") if typ in ("R", "I") else [scalar]
+            v = (
+                nums(scalar or "")
+                if typ in ("R", "I")
+                else ([str(scalar).strip().upper() in ("T", ".TRUE.")] if typ == "L" else [scalar])
+            )
             if v:
                 r[key] = v[0]
     return r
@@ -433,7 +633,7 @@ def parse_fchk(text, name, source):
     r = fchk_records(text)
     c = Calculation(name, source, kind="checkpoint")
     zs = r.get("Atomic numbers", [])
-    xyz = r.get("Current cartesian coordinates", [])
+    xyz = r.get("Current cartesian coordinates", r.get("Current Cartesian Coordinates", []))
     if not zs or len(xyz) != 3 * len(zs):
         raise ValueError("fchk의 원자번호/Cartesian 좌표가 없거나 길이가 다릅니다.")
     c.atoms = list(map(int, zs))
@@ -444,9 +644,23 @@ def parse_fchk(text, name, source):
     c.multiplicity = int(r["Multiplicity"]) if "Multiplicity" in r else None
     c.route = " ".join(text.splitlines()[:2])
     c.properties["basis_functions"] = r.get("Number of basis functions")
-    for key in ["Total Energy", "SCF Energy", "MP2 Energy", "Cluster Energy"]:
+    c.properties["formatted_checkpoint"] = source
+    c.properties["checkpoint_method_header"] = text.splitlines()[1]
+    for label in ["Full title", "Full Title", "Route"]:
+        if label in r:
+            c.properties["full_title" if label.lower() == "full title" else "checkpoint_route"] = (
+                "".join(r[label]).rstrip() if isinstance(r[label], list) else r[label]
+            )
+    for key in ["SCF Energy", "MP2 Energy", "Cluster Energy", "Total Energy"]:
         if key in r:
             c.energies.append({"kind": key, "hartree": r[key], "line": None})
+    if c.energies:
+        c.frames[0].update(
+            energy_hartree=c.energies[-1]["hartree"], energy_kind=c.energies[-1]["kind"]
+        )
+    na = int(r.get("Number of alpha electrons", 0))
+    nb = int(r.get("Number of beta electrons", na))
+    c.properties.update(alpha_electrons=na, beta_electrons=nb)
     for spin in ["Alpha", "Beta"]:
         if spin + " Orbital Energies" in r:
             ev = [v * HARTREE_EV for v in r[spin + " Orbital Energies"]]
@@ -454,8 +668,38 @@ def parse_fchk(text, name, source):
             factor = 1 if "Beta Orbital Energies" in r else 2
             c.orbitals[spin.lower()] = {
                 "energies_eV": ev,
-                "occupations": [factor if k < ne else 0 for k in range(len(ev))],
+                "occupations": (
+                    [factor if k < ne else 0 for k in range(len(ev))]
+                    if factor == 1
+                    else [
+                        2 if k < min(na, nb) else 1 if k < max(na, nb) else 0
+                        for k in range(len(ev))
+                    ]
+                ),
+                "has_coefficients": bool(r.get(spin + " MO coefficients")),
             }
+            coefficients = r.get(spin + " MO coefficients")
+            nbasis = r.get("Number of basis functions")
+            if (
+                coefficients is not None
+                and nbasis is not None
+                and len(coefficients) != int(nbasis) * len(ev)
+            ):
+                raise ValueError(
+                    f"fchk MO 계수 행렬 길이 불일치: {spin} ({len(coefficients)}/{int(nbasis)*len(ev)})"
+                )
+    for label, sign in [("Cartesian Gradient", -1.0), ("Cartesian Forces", 1.0)]:
+        if label in r and len(r[label]) == 3 * len(zs):
+            c.force_records = [
+                {
+                    "forces_hartree_bohr": (sign * np.asarray(r[label]).reshape(-1, 3)).tolist(),
+                    "line": None,
+                    "source": label + (" (force = -gradient)" if sign < 0 else ""),
+                    "coordinate_system": "checkpoint standard orientation",
+                }
+            ]
+            c.frames[0]["force_record"] = 0
+            break
     for key in [
         "Mulliken Charges",
         "ESP Charges",
@@ -475,11 +719,24 @@ def parse_fchk(text, name, source):
             [a[1], a[2], a[4]],
             [a[3], a[4], a[5]],
         ]
+        c.properties["polarizability_records"] = [
+            {
+                "tensor_au": c.properties["polarizability_au"],
+                "frequency_au": 0.0,
+                "line": None,
+                "source": "fchk Polarizability",
+                "orientation": "checkpoint standard orientation",
+            }
+        ]
     n = int(r.get("Number of Normal Modes", r.get("Number of normal modes", 0)))
     vib = r.get("Vib-E2", [])
     disp = r.get("Vib-Modes", [])
     for k in range(n):
-        m = {"frequency_cm1": vib[k] if k < len(vib) else None, "displacements": []}
+        m = {
+            "frequency_cm1": vib[k] if k < len(vib) else None,
+            "displacements": [],
+            "reference_frame": 0,
+        }
         for block, key in [
             (1, "reduced_mass_amu"),
             (2, "force_constant"),

@@ -11,6 +11,7 @@ let state = {},
   timer = null,
   modeIndex = null,
   currentTask = null,
+  renderedFrameKey = null,
   settings = { labels: false, style: "ball", background: "#101b2b" };
 try {
   settings = {
@@ -20,15 +21,18 @@ try {
 } catch (e) {}
 const tabs = [
   "개요",
-  "수렴·TS",
-  "진동·분광",
   "MO·표면",
+  "진동·분광",
+  "에너지·Force",
+  "분극률",
+  "수렴·TS",
   "물성",
   "경로",
   "비교·열화학",
   "구조·입력",
   "도구",
   "지원 범위",
+  "도움말",
 ];
 let tab = tabs[0];
 function node(tag, text, cls) {
@@ -58,7 +62,14 @@ async function api(path, body) {
 }
 function button(parent, label, fn) {
   const b = node("button", label);
-  b.onclick = () => Promise.resolve(fn()).catch((e) => status(e.message, true));
+  b.title = helpText(label);
+  b.onclick = async () => {
+    try {
+      await fn();
+    } catch (e) {
+      status(e.message, true);
+    }
+  };
   parent.append(b);
   return b;
 }
@@ -150,6 +161,8 @@ async function load(id) {
   calc = await api("/api/calculation/" + id);
   frame = Math.max(0, calc.frames.length - 1);
   modeIndex = null;
+  activeMO = null;
+  clearShapes();
   selected = [];
   meshes = [];
   $("frame").max = Math.max(0, calc.frames.length - 1);
@@ -167,6 +180,18 @@ async function load(id) {
 async function result(d) {
   if (d.task) return poll(d.task);
   await refresh();
+  if (d.orbital_surface) {
+    if (calc?.id !== d.calculation_id) return d;
+    stop();
+    frame = calc.frames.length - 1;
+    $("frame").value = frame;
+    clearShapes();
+    draw(false, d.reference_coords);
+    d.meshes.forEach(addMesh);
+    viewer.render();
+    status(`MO ${d.orbital} / ${d.spin} · ±위상 표면 (파랑 + / 분홍 −)`);
+    return d;
+  }
   if (d.ids?.length) await load(d.ids[0]);
   return d;
 }
@@ -207,6 +232,11 @@ const elements =
   );
 function draw(reset = false, coords = null) {
   if (!viewer || !calc?.frames.length) return;
+  const key = calc.id + ":" + frame;
+  if (key !== renderedFrameKey) {
+    clearShapes();
+    renderedFrameKey = key;
+  }
   const cam = reset ? null : viewer.getView();
   viewer.removeAllModels();
   viewer.removeAllLabels();
@@ -223,6 +253,7 @@ function draw(reset = false, coords = null) {
   else viewer.setView(cam);
   viewer.render();
   $("frameLabel").textContent = `${frame + 1} / ${calc.frames.length}`;
+  if (!coords) updateForcePanel().catch((e) => status(e.message, true));
 }
 function applyStyle() {
   if (!model) return;
@@ -246,15 +277,13 @@ function applyStyle() {
     );
   viewer.removeAllLabels();
   if ($("labels").checked)
-    model
-      .selectedAtoms({})
-      .forEach((a, i) =>
-        viewer.addLabel(`${i + 1} ${a.elem}`, {
-          position: a,
-          fontSize: 11,
-          backgroundOpacity: 0.4,
-        }),
-      );
+    model.selectedAtoms({}).forEach((a, i) =>
+      viewer.addLabel(`${i + 1} ${a.elem}`, {
+        position: a,
+        fontSize: 11,
+        backgroundOpacity: 0.4,
+      }),
+    );
   viewer.render();
 }
 async function showSelection() {
@@ -273,20 +302,25 @@ function stop() {
   timer = null;
   $("play").textContent = "▶ 경로";
 }
-function animateMode(index, amp = 0.5) {
+function animateMode(index, amp = modeAmplitude) {
   stop();
   const m = calc.modes[index];
   if (m.displacements?.length !== calc.atoms.length)
     throw Error("변위 데이터가 없습니다.");
   modeIndex = index;
+  modeAmplitude = amp;
+  frame = m.reference_frame ?? calc.frames.length - 1;
+  $("frame").value = frame;
+  clearShapes();
   const base = calc.frames[frame].coords;
   let tick = 0;
   timer = setInterval(() => {
-    const s = amp * Math.sin(tick++ * 0.2),
+    const s = amp * Math.sin(tick++ * 0.2 * modeSpeed),
       coords = base.map((v, i) =>
         v.map((x, j) => x + s * m.displacements[i][j]),
       );
     draw(false, coords);
+    if (modeVectors) drawVectors(coords, m.displacements);
   }, 70);
   status(`${m.frequency_cm1} cm-1 · 시각화용 진동 변위 (실제 시간축 아님)`);
 }
@@ -301,6 +335,10 @@ function renderPanel() {
     });
     if (t === tab) b.className = "active";
   });
+  if (tab === "도움말") {
+    renderHelp(panel);
+    return;
+  }
   if (!calc) {
     note(panel, "파일을 열면 구조와 분석 항목을 표시합니다.");
     if (tab === "지원 범위") showCatalog(panel);
@@ -325,7 +363,7 @@ function renderPanel() {
       card.append(
         node("small", e.kind + " · Hartree"),
         node("br"),
-        node("strong", format(e.hartree)),
+        node("strong", e.hartree.toFixed(12)),
       );
       panel.append(card);
     }
@@ -335,7 +373,9 @@ function renderPanel() {
     table(
       panel,
       ["종류", "Hartree", "원문 행"],
-      calc.energies.slice(-150).map((e) => [e.kind, e.hartree, e.line]),
+      calc.energies
+        .slice(-150)
+        .map((e) => [e.kind, e.hartree.toFixed(12), e.line]),
     );
     button(panel, "분석 JSON 저장", () =>
       download(
@@ -370,149 +410,10 @@ function renderPanel() {
       animateMode(i);
     });
   }
-  if (tab === "진동·분광") {
-    const kind = select(panel, "Spectrum", [
-      ["IR", "IR"],
-      ["Raman", "Raman"],
-      ["VCD", "VCD"],
-      ["UV-Vis", "UV-Vis (eV)"],
-      ["ECD", "ECD"],
-      ["NMR", "NMR"],
-    ]);
-    const scale = field(panel, "진동수 배율", 1, "number"),
-      width = field(panel, "FWHM (진동 cm-1 / UV eV / NMR ppm)", 12, "number"),
-      laser = field(panel, "Raman laser (nm)", 532, "number"),
-      temp = field(panel, "Raman 온도 (K)", 298.15, "number"),
-      ref = field(panel, "NMR reference shielding (ppm)", 0, "number");
-    kind.onchange = () =>
-      (width.value = ["UV-Vis", "ECD"].includes(kind.value)
-        ? 0.25
-        : kind.value === "NMR"
-          ? 0.05
-          : 12);
-    button(panel, "스펙트럼 그리기", async () => {
-      plotData = await action("spectrum", {
-        kind: kind.value,
-        scale: +scale.value,
-        width: +width.value,
-        laser_nm: +laser.value,
-        temperature: +temp.value,
-        reference: +ref.value,
-      });
-      plot();
-    });
-    const row = node("div", undefined, "row");
-    panel.append(row);
-    button(row, "재생 중지", () => {
-      stop();
-      draw();
-    });
-    const amp = field(panel, "변위 진폭 (표시용)", 0.5, "number");
-    table(
-      panel,
-      ["모드", "cm-1", "IR", "Raman"],
-      calc.modes.map((m, i) => [
-        i + 1,
-        m.frequency_cm1,
-        m.ir_km_mol,
-        m.raman_activity,
-      ]),
-      (i) => animateMode(i, +amp.value),
-    );
-    button(panel, "모드 +변위 XYZ", () => displace(+amp.value));
-    button(panel, "모드 -변위 XYZ", () => displace(-amp.value));
-    note(
-      panel,
-      "원시 주파수/강도와 plot 보정은 별도입니다. ROA·ORD·비조화·vibronic 상세 parser는 지원 범위를 확인하세요.",
-    );
-  }
-  if (tab === "MO·표면") {
-    const spin = select(panel, "Spin", [
-      ["alpha", "Alpha"],
-      ["beta", "Beta"],
-    ]);
-    const mo = field(panel, "MO 번호 (1부터)", 1, "number"),
-      kind = select(panel, "공간장", [
-        ["mo", "Molecular orbital"],
-        ["density", "SCF density"],
-        ["potential", "SCF ESP"],
-        ["spin", "SCF spin density"],
-      ]);
-    button(panel, "Gaussian cubegen으로 생성", async () =>
-      result(
-        await action("generate_cube", {
-          kind: kind.value,
-          spin: spin.value,
-          orbital: +mo.value,
-          grid: "coarse",
-        }),
-      ),
-    );
-    const fs = Object.entries(state.fields || {});
-    const fld = select(
-        panel,
-        "열려 있는 cube",
-        fs.map(([id, f]) => [id, f.name]),
-        p.field_id,
-      ),
-      level = field(panel, "등치값", 0.03, "number"),
-      channel = field(panel, "Field 채널 (0부터)", 0, "number");
-    const add = async (sign) => {
-      if (!fld.value) throw Error("cube를 먼저 여세요.");
-      const mesh = await action("mesh", {
-        field_id: fld.value,
-        level: sign * Math.abs(+level.value),
-        channel: +channel.value,
-      });
-      const vertices = mesh.vertices.map((v) => new $3Dmol.Vector3(...v));
-      const sh = viewer.addCustom({
-        vertexArr: vertices,
-        normalArr: mesh.normals.map((v) => new $3Dmol.Vector3(...v)),
-        faceArr: mesh.faces.flat(),
-        color: sign > 0 ? "#58b9f8" : "#f27e96",
-        opacity: 0.7,
-      });
-      meshes.push(sh);
-      viewer.render();
-      status(
-        `surface ${mesh.level}: ${mesh.faces.length} triangles · preview stride ${mesh.preview_stride}`,
-      );
-    };
-    button(panel, "+ 표면", () => add(1));
-    button(panel, "− 표면", () => add(-1));
-    button(panel, "표면 숨기기", () => {
-      viewer.removeAllShapes();
-      meshes = [];
-      viewer.render();
-    });
-    button(panel, "cube 정보·적분", async () =>
-      showObject(
-        await action("integrate", {
-          field_id: fld.value,
-          channel: +channel.value,
-        }),
-      ),
-    );
-    panel.append(node("h3", "MO energy / eV"));
-    const o = calc.orbitals[spin.value] || {};
-    table(
-      panel,
-      ["MO", "eV", "점유"],
-      (o.energies_eV || []).map((v, i) => [i + 1, v, o.occupations?.[i]]),
-      (i) => {
-        mo.value = i + 1;
-      },
-    );
-    spin.onchange = () => {
-      const o = calc.orbitals[spin.value];
-      if (o)
-        mo.value = Math.max(1, o.occupations.findLastIndex((v) => v > 0) + 1);
-    };
-    note(
-      panel,
-      "MO energy diagram은 표로 표시합니다. 표면은 fchk + cubegen 또는 이미 생성한 cube가 필요합니다. canonical/NTO/NBO의 종류는 원본에서 확인하세요.",
-    );
-  }
+  if (tab === "진동·분광") renderVibrations(panel);
+  if (tab === "MO·표면") renderMO(panel);
+  if (tab === "에너지·Force") renderForces(panel);
+  if (tab === "분극률") renderPolar(panel);
   if (tab === "물성") {
     for (const [k, v] of Object.entries(p)) {
       if (["field_id", "input_original"].includes(k)) continue;
@@ -699,9 +600,9 @@ function renderPanel() {
 function displace(a) {
   if (modeIndex === null) throw Error("진동 모드를 먼저 선택하세요.");
   const m = calc.modes[modeIndex],
-    coords = calc.frames[frame].coords.map((v, i) =>
-      v.map((x, j) => x + a * m.displacements[i][j]),
-    );
+    coords = calc.frames[
+      m.reference_frame ?? calc.frames.length - 1
+    ].coords.map((v, i) => v.map((x, j) => x + a * m.displacements[i][j]));
   download("mode-displacement.xyz", xyz(coords));
 }
 function showObject(o) {
@@ -843,8 +744,7 @@ $("demoBtn").onclick = () =>
     .catch((e) => status(e.message, true));
 $("refreshBtn").onclick = async () => {
   try {
-    if (calc?.source && !calc.source.includes("gausslook-"))
-      await result(await api("/api/open", { path: calc.source }));
+    if (calc) await result(await action("reload_source"));
     else await refresh();
   } catch (e) {
     status(e.message, true);
@@ -889,6 +789,7 @@ $("clearSelection").onclick = () => {
 $("frame").oninput = () => {
   stop();
   frame = +$("frame").value;
+  clearShapes();
   draw();
 };
 $("play").onclick = () => {
@@ -1011,8 +912,21 @@ try {
 } catch (e) {
   status("WebGL 초기화 실패: " + e.message, true);
 }
-refresh()
+$("helpBtn").onclick = openHelp;
+window.addEventListener("keydown", (e) => {
+  if (e.key === "F1") {
+    e.preventDefault();
+    openHelp();
+  }
+});
+Promise.all([
+  refresh(),
+  api("/api/help").then((d) => {
+    helpData = d;
+  }),
+])
   .then(() => {
+    applyHelpTitles();
     renderPanel();
     if (state.calculations.length) load(state.calculations[0].id);
   })

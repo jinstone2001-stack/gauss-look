@@ -21,7 +21,8 @@
     "feature": "바이너리 checkpoint 열기",
     "status": "지원",
     "data": "K, U",
-    "plan": "호환 `formchk`를 작업 복사본에 실행한다. 반환 코드·출력 파일·필수 레코드를 모두 확인한다."
+    "plan": "호환 `formchk`를 작업 복사본에 실행한다. 반환 코드·출력 파일·필수 레코드를 모두 확인한다.",
+    "implementation": "1.1: 원본 chk 복사 변환·재변환, CLI startup 대기, utility 오류 처리. 실제 Gaussian 실행은 사용자 환경 검증 필요."
   },
   {
     "id": "I04",
@@ -29,7 +30,8 @@
     "feature": "formatted checkpoint 열기",
     "status": "지원",
     "data": "F",
-    "plan": "레코드 길이, 자료형·배열 수, Fortran D 지수와 선택 레코드를 검사한다."
+    "plan": "레코드 길이, 자료형·배열 수, Fortran D 지수와 선택 레코드를 검사한다.",
+    "implementation": "1.1: C=5A12/H=9A8 고정 폭 문자열·L logical·숫자 배열과 길이 검증. Full title 단어 수 오류 회귀시험 포함."
   },
   {
     "id": "I05",
@@ -637,7 +639,8 @@
     "feature": "분극률 등 분자 물성 요약",
     "status": "지원",
     "data": "L/F",
-    "plan": "tensor·평균값·static/dynamic·주파수와 단위를 보존한다. 분자 분극률을 고체 유전율로 표기하지 않는다."
+    "plan": "tensor·평균값·static/dynamic·주파수와 단위를 보존한다. 분자 분극률을 고체 유전율로 표기하지 않는다.",
+    "implementation": "1.1: 출처·주파수별 분극률 tensor, 평균 a.u./Å³·비등방성·고유값·CSV 전용 UI."
   },
   {
     "id": "R05",
@@ -645,7 +648,8 @@
     "feature": "최적화 수렴 요약",
     "status": "지원",
     "data": "L",
-    "plan": "max/RMS force와 displacement, threshold·예측 에너지 변화를 보여준다. 전체 수렴은 Gaussian 판정과 함께 표시한다."
+    "plan": "max/RMS force와 displacement, threshold·예측 에너지 변화를 보여준다. 전체 수렴은 Gaussian 판정과 함께 표시한다.",
+    "implementation": "1.1: 수렴 기준과 별도로 구조별 원자 Cartesian force, max/RMS·단위·벡터·CSV 표시."
   },
   {
     "id": "R06",
@@ -749,7 +753,8 @@
     "feature": "MO 에너지·점유 diagram",
     "status": "부분·조건부",
     "data": "L/F",
-    "plan": "HOMO/LUMO·점유·대칭·degeneracy threshold와 energy/occupancy 순서를 표시한다. 0/1 기반 번호를 구별한다."
+    "plan": "HOMO/LUMO·점유·대칭·degeneracy threshold와 energy/occupancy 순서를 표시한다. 0/1 기반 번호를 구별한다.",
+    "implementation": "1.1: 양 GUI 클릭 diagram·MO 표·spin별 HOMO/LUMO·gap·0/1/2 점유. symmetry/degeneracy 묶음은 후속."
   },
   {
     "id": "O02",
@@ -757,7 +762,8 @@
     "feature": "특정 MO·여러 MO 등치면",
     "status": "지원",
     "data": "F, U 또는 C",
-    "plan": "선택 오비탈의 ψ를 공간장으로 만든다. ±위상과 같은 등치값·격자로 비교한다."
+    "plan": "선택 오비탈의 ψ를 공간장으로 만든다. ±위상과 같은 등치값·격자로 비교한다.",
+    "implementation": "1.1: 선택 MO ±위상 동시 표시, cubegen cube 재사용. 여러 서로 다른 MO의 동시 투명도 조작은 전용 UI 없음."
   },
   {
     "id": "O03",
@@ -1101,7 +1107,8 @@
     "feature": "도움말·문맥 도움·tips·버전 정보",
     "status": "지원",
     "data": "자체 도움말",
-    "plan": "공식 개념에 링크하고 자체 UI 도움말을 작성한다. 네트워크 없이 기본 설명·지원 버전을 볼 수 있게 한다."
+    "plan": "공식 개념에 링크하고 자체 UI 도움말을 작성한다. 네트워크 없이 기본 설명·지원 버전을 볼 수 있게 한다.",
+    "implementation": "1.1: 검색 가능한 오프라인 한·영 매뉴얼, F1, 모든 작업 버튼별 hover 설명."
   },
   {
     "id": "A01",

@@ -71,6 +71,7 @@ class Calculation:
     thermo: dict = field(default_factory=dict)
     transitions: list = field(default_factory=list)
     convergence: list = field(default_factory=list)
+    force_records: list = field(default_factory=list)
     status: dict = field(
         default_factory=lambda: {
             "termination": "unknown",

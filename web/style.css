@@ -354,3 +354,80 @@ dialog::backdrop {
     height: 650px;
   }
 }
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(175px, 1fr));
+  gap: 8px;
+  margin: 12px 0;
+}
+.metric {
+  padding: 12px;
+  background: #152b3b;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+.metric small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 7px;
+}
+.metric strong {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.table-scroll {
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.imaginary {
+  color: #ff9eb4;
+}
+.card.imaginary strong {
+  color: #ff9eb4;
+}
+.orbital-diagram {
+  background: #101b2b;
+  border-radius: 7px;
+  margin: 10px 0;
+}
+.orbital-diagram svg {
+  width: 100%;
+  min-height: 155px;
+}
+.manual-body {
+  white-space: pre-wrap;
+  line-height: 1.85;
+  font-size: 13px;
+}
+.help-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 14px 0;
+  max-height: 210px;
+  overflow: auto;
+}
+.help-topics button {
+  font-size: 12px;
+  text-align: left;
+}
+.help-content {
+  padding: 12px;
+  background: #0c1726;
+  border-radius: 7px;
+}
+label.field input[type="checkbox"] {
+  width: auto;
+  display: inline;
+  margin-left: 12px;
+}
+summary {
+  cursor: pointer;
+  color: var(--accent);
+  margin: 15px 0;
+}

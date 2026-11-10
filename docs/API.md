@@ -1,5 +1,39 @@
 # 공통 분석 API
 
+1.1의 주요 UI는 아래 기능을 직접 제공합니다. 같은 수치를 API에서도 사용할 수 있습니다.
+
+```json
+{"action":"frame_analysis","frame":0}
+```
+
+선택 frame의 에너지 종류·Hartree/eV와 원자별 Force·max/RMS·출처를 반환합니다. `force=null`은 미출력이며 0이 아닙니다. checkpoint Gradient는 −부호로 Force로 변환합니다.
+
+```json
+{"action":"orbital_analysis"}
+```
+
+spin별 MO 번호(1부터), 에너지·점유·HOMO/LUMO·gap을 반환합니다. 분리 spin 채널과 공간 오비탈을 구분합니다.
+
+```json
+{"action":"orbital_surface","spin":"alpha","orbital":25,"grid":"coarse","level":0.03}
+```
+
+task 완료 시 `meshes`의 ±위상 표면을 반환합니다. 원래 계산 선택을 유지하며 cube는 소스 파일·수정 시각·MO·spin·격자가 같은 경우 재사용합니다. 실제로 연 chk/fchk의 MO 계수와 cubegen이 필요합니다. 프로젝트에 기록된 임의 경로를 실행 근거로 사용하지 않습니다.
+
+```json
+{"action":"link_checkpoint","checkpoint_id":"열린_checkpoint_ID"}
+```
+
+현재 로그와 선택 checkpoint의 원자 순서·전하·다중도·강체 정렬 최종 구조(RMSD≤0.002 Å)를 검사해 새 연결 항목을 만듭니다. MO 표면 좌표계에 맞춰 로그 구조·변위·Force를 회전합니다. method/basis/전자 상태 확인은 원본 입력과 함께 수행하세요.
+
+```json
+{"action":"reload_source"}
+```
+
+원본을 다시 읽고 새 항목을 만듭니다. chk는 원본 chk에서 재변환합니다. snapshot만 연 경우 원본을 다시 열어야 합니다.
+
+`GET /api/calculation/ID`에는 `orbital_analysis`, `polarizability_analysis`, `final_frame_analysis`가 포함됩니다. `GET /api/help`는 내장 매뉴얼과 개별 버튼 설명을 반환합니다. `reference_frame`은 모드의 진동 기준 구조 인덱스입니다.
+
 웹 `도구 → 고급 공통 분석 API`, 또는 X11 `도구`의 JSON 입력 창에서 실행합니다. `id`를 생략하면 현재 계산을 사용합니다. ID는 분석 JSON이나 `/api/state`에서 확인할 수 있습니다. 인덱스는 원자/frame/mode/field 채널의 경우 **0부터**, cubegen의 **MO 번호만 1부터**입니다. 이 엔진은 임의 shell 명령을 실행하는 기능을 제공하지 않습니다.
 
 ```json

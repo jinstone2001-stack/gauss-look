@@ -44,6 +44,10 @@ def make_server(engine, host="127.0.0.1", port=8888):
                             "fields": {k: v.info() for k, v in engine.fields.items()},
                         }
                     )
+                if route == "/api/help":
+                    from .help import help_payload
+
+                    return self.send(help_payload())
                 if route.startswith("/api/calculation/"):
                     return self.send(engine.detail(route.rsplit("/", 1)[1]))
                 if route.startswith("/api/task/"):

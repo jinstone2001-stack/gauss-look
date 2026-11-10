@@ -1,9 +1,150 @@
 from __future__ import annotations
 import math
 import numpy as np
-from .model import HARTREE_KJ
+from .model import HARTREE_KJ, HARTREE_EV, BOHR_ANG
 
 R = 8.31446261815324
+
+
+def orbital_analysis(c):
+    channels = {}
+    for spin, o in c.orbitals.items():
+        energy = o.get("energies_eV", [])
+        occ = o.get("occupations", [])
+        occupied = [i for i, v in enumerate(occ[: len(energy)]) if v > 1e-8]
+        virtual = [i for i, v in enumerate(occ[: len(energy)]) if v <= 1e-8]
+        homo = max(occupied) if occupied else None
+        # LUMO is an unoccupied orbital above HOMO; unusual occupancies are retained.
+        lumo = next((i for i in virtual if homo is None or i > homo), None)
+        rows = []
+        for i, e in enumerate(energy):
+            label = ""
+            if homo is not None and i <= homo:
+                label = "HOMO" if i == homo else f"HOMO-{homo-i}"
+            elif lumo is not None and i >= lumo:
+                label = "LUMO" if i == lumo else f"LUMO+{i-lumo}"
+            rows.append(
+                {
+                    "mo": i + 1,
+                    "label": label,
+                    "energy_eV": e,
+                    "energy_hartree": e / HARTREE_EV,
+                    "occupation": occ[i] if i < len(occ) else None,
+                    "singly_occupied": bool(
+                        len(c.orbitals) == 1 and i < len(occ) and abs(occ[i] - 1) < 1e-8
+                    ),
+                }
+            )
+        channels[spin] = {
+            "rows": rows,
+            "homo": rows[homo] if homo is not None else None,
+            "lumo": rows[lumo] if lumo is not None else None,
+            "gap_eV": (
+                energy[lumo] - energy[homo] if homo is not None and lumo is not None else None
+            ),
+            "has_coefficients": o.get("has_coefficients", False),
+            "representation": o.get(
+                "representation", "spin orbitals" if len(c.orbitals) > 1 else "spatial orbitals"
+            ),
+        }
+    return {
+        "channels": channels,
+        "note": "HOMO–LUMO gap is an orbital-energy difference, not an excitation energy or a guaranteed band gap.",
+    }
+
+
+def frame_analysis(c, index=-1):
+    if not c.frames:
+        return {"frame": None, "energy": None, "force": None}
+    index = int(index)
+    if index < 0:
+        index += len(c.frames)
+    if not 0 <= index < len(c.frames):
+        raise ValueError("Frame 번호 범위를 확인하세요.")
+    f = c.frames[index]
+    value = f.get("energy_hartree")
+    kind = f.get("energy_kind", "electronic energy")
+    energy = (
+        {"hartree": value, "eV": value * HARTREE_EV, "kind": kind} if value is not None else None
+    )
+    force = None
+    ri = f.get("force_record")
+    if ri is not None and 0 <= ri < len(c.force_records):
+        record = c.force_records[ri]
+        a = np.array(record["forces_hartree_bohr"], float)
+        if a.shape == (len(c.atoms), 3):
+            scale = HARTREE_EV / BOHR_ANG
+            force = {
+                "vectors_hartree_bohr": a.tolist(),
+                "vectors_eV_A": (a * scale).tolist(),
+                "norms_hartree_bohr": np.linalg.norm(a, axis=1).tolist(),
+                "max_component_hartree_bohr": float(np.abs(a).max()),
+                "rms_component_hartree_bohr": float(np.sqrt(np.mean(a * a))),
+                "max_atom_norm_hartree_bohr": float(np.linalg.norm(a, axis=1).max()),
+                "line": record.get("line"),
+                "source": record.get("source"),
+                "coordinate_system": record.get("coordinate_system"),
+            }
+    return {
+        "frame": index,
+        "energy": energy,
+        "force": force,
+        "geometry_line": f.get("line"),
+        "note": "Cartesian force = -gradient. Cartesian max/RMS components are distinct from Gaussian internal-coordinate convergence criteria.",
+    }
+
+
+def polarizability_analysis(c):
+    records = c.properties.get("polarizability_records", [])
+    raw = c.properties.get("polarizability_au")
+    if not records and raw is not None:
+        records = [
+            {
+                "tensor_au": raw,
+                "frequency_au": None,
+                "source": "parsed polarizability",
+                "orientation": "as reported",
+            }
+        ]
+    rows = []
+    for record in records:
+        a = np.asarray(record["tensor_au"], float)
+        if a.shape != (3, 3) or not np.isfinite(a).all():
+            continue
+        sym = (a + a.T) / 2
+        mean = float(np.trace(sym) / 3)
+        aniso = float(
+            np.sqrt(
+                0.5
+                * (
+                    (sym[0, 0] - sym[1, 1]) ** 2
+                    + (sym[1, 1] - sym[2, 2]) ** 2
+                    + (sym[2, 2] - sym[0, 0]) ** 2
+                    + 6 * (sym[0, 1] ** 2 + sym[1, 2] ** 2 + sym[0, 2] ** 2)
+                )
+            )
+        )
+        rows.append(
+            {
+                **record,
+                "tensor_au": a.tolist(),
+                "mean_au": mean,
+                "mean_A3": mean * 0.148184711472,
+                "anisotropy_au": aniso,
+                "eigenvalues_au": np.linalg.eigvalsh(sym).tolist(),
+            }
+        )
+    static = [
+        i
+        for i, r in enumerate(rows)
+        if r.get("frequency_au") is not None and abs(r["frequency_au"]) < 1e-12
+    ]
+    default = static[-1] if static else len(rows) - 1 if rows else None
+    return {
+        "records": rows,
+        "default_index": default,
+        "note": "Molecular polarizability. a.u.→Å³ converts polarizability volume; this is not polymer dielectric permittivity.",
+    }
 
 
 def quality(c):

@@ -14,6 +14,9 @@ from .analysis import (
     alignment,
     measure,
     thermochemistry_correction,
+    orbital_analysis,
+    frame_analysis,
+    polarizability_analysis,
 )
 
 
@@ -23,6 +26,9 @@ class Engine:
         self.calcs = {}
         self.fields = {}
         self.tasks = {}
+        self.checkpoints = {}
+        self.reload_sources = {}
+        self.orbital_cache = {}
         self.pool = ThreadPoolExecutor(max_workers=2)
         self.lock = threading.RLock()
         self.work = Path(tempfile.mkdtemp(prefix="gausslook-"))
@@ -73,7 +79,13 @@ class Engine:
         if path.suffix.lower() == ".glproj":
             return self.load_project(json.loads(path.read_text()))
         cs = parse_file(path)
-        return {"ids": [self.add(c) for c in cs]}
+        ids = [self.add(c) for c in cs]
+        for cid in ids:
+            self.reload_sources[cid] = str(path)
+        if path.suffix.lower() in (".fchk", ".fch"):
+            for cid in ids:
+                self.checkpoints[cid] = str(path)
+        return {"ids": ids}
 
     def upload(self, name, data):
         if len(data) > 256 * 1024 * 1024:
@@ -98,6 +110,7 @@ class Engine:
                     "frames": len(c.frames),
                     "source": c.source,
                     "status": c.status,
+                    "checkpoint_linked": bool(self.checkpoints.get(c.id)),
                 }
                 for c in self.calcs.values()
             ]
@@ -112,6 +125,23 @@ class Engine:
         d = c.public()
         d["quality"] = quality(c)
         d["capabilities"] = capabilities(c, self.utilities)
+        d["orbital_analysis"] = orbital_analysis(c)
+        d["polarizability_analysis"] = polarizability_analysis(c)
+        d["final_frame_analysis"] = frame_analysis(c)
+        d["orbital_surface_ready"] = bool(
+            self.checkpoints.get(cid) and self.utilities.get("cubegen")
+        )
+        d["checkpoint_linked"] = bool(self.checkpoints.get(cid))
+        for entry in d["capabilities"]:
+            if entry["feature"] == "cube 생성":
+                entry["available"] = bool(
+                    self.checkpoints.get(cid) and self.utilities.get("cubegen")
+                )
+                entry["reason"] = (
+                    "사용 가능"
+                    if entry["available"]
+                    else "chk/fchk와 Gaussian cubegen이 필요합니다."
+                )
         if "polarizability_au" in c.properties:
             a = np.asarray(c.properties["polarizability_au"])
             d["properties"]["polarizability_mean_au"] = float(np.trace(a) / 3)
@@ -198,15 +228,37 @@ class Engine:
         if not fchk.is_file():
             raise ValueError("formchk가 fchk를 생성하지 않았습니다.")
         task["progress"] = 80
-        return self.load(fchk)
+        result = self.load(fchk)
+        for cid in result["ids"]:
+            c = self.get(cid)
+            c.properties["checkpoint_file"] = str(path)
+            c.properties["converted_from_chk"] = True
+            self.reload_sources[cid] = str(path)
+        return result
+
+    def reload_source(self, cid):
+        source = self.reload_sources.get(cid)
+        if not source:
+            raise ValueError("원본 경로가 없는 snapshot입니다. 원본 log/chk/fchk를 다시 여세요.")
+        return self.load(source)
 
     def generate(self, cid, kind, orbital, spin, grid, task):
         c = self.get(cid)
-        if not c.source.lower().endswith((".fchk", ".fch")):
-            raise ValueError("cube 생성에는 해당 계산의 fchk를 열어야 합니다.")
+        source = self.checkpoints.get(cid)
+        if not source:
+            raise ValueError(
+                "MO 표면에는 fchk 또는 변환 가능한 chk가 필요합니다. 로그와 chk를 모두 연 뒤 연결할 수도 있습니다."
+            )
         if kind == "mo":
             if spin not in ("alpha", "beta") or not 1 <= int(orbital) <= 100000:
                 raise ValueError("spin과 1부터 시작하는 MO 번호를 확인하세요.")
+            channel = c.orbitals.get(spin)
+            if channel is None or int(orbital) > len(channel.get("energies_eV", [])):
+                raise ValueError("선택한 spin/MO 번호가 checkpoint의 오비탈 범위를 벗어납니다.")
+            if not channel.get("has_coefficients", False):
+                raise ValueError(
+                    "이 checkpoint에 선택한 MO 계수가 없습니다. MO coefficient를 저장한 chk/fchk가 필요합니다."
+                )
             spec = ("AMO=" if spin == "alpha" else "BMO=") + str(int(orbital))
         elif kind in ("density", "potential", "spin"):
             spec = {"density": "Density=SCF", "potential": "Potential=SCF", "spin": "Spin=SCF"}[
@@ -220,14 +272,149 @@ class Engine:
         task["progress"] = 10
         self.utility(
             "cubegen",
-            ["0", spec, c.source, out, {"coarse": "-2", "medium": "-3", "fine": "-4"}[grid], "h"],
+            ["0", spec, source, out, {"coarse": "-2", "medium": "-3", "fine": "-4"}[grid], "h"],
             task,
         )
         task["progress"] = 85
         return self.load(out)
 
+    def orbital_surface(self, cid, spin, orbital, grid, level, task):
+        c = self.get(cid)
+        level = abs(float(level))
+        if level <= 0:
+            raise ValueError("MO 등치값은 양수여야 합니다.")
+        source = self.checkpoints.get(cid)
+        if not source:
+            raise ValueError("chk/fchk를 먼저 여세요. log만으로 MO 등치면을 생성할 수 없습니다.")
+        stat = Path(source).stat()
+        key = (source, stat.st_size, stat.st_mtime_ns, spin, int(orbital), grid)
+        fid = self.orbital_cache.get(key)
+        if fid not in self.fields:
+            result = self.generate(cid, "mo", int(orbital), spin, grid, task)
+            fid = result["field_id"]
+            self.orbital_cache[key] = fid
+        f = self.fields[fid]
+        meshes = []
+        for signed in (level, -level):
+            if f.values[:, :, :, 0].min() < signed < f.values[:, :, :, 0].max():
+                meshes.append(isosurface(f, level=signed, max_faces=45000))
+        if not meshes:
+            raise ValueError(
+                "선택 등치값에서 MO 표면이 없습니다. 등치값을 줄이거나 격자를 확인하세요."
+            )
+        task["progress"] = 95
+        return {
+            "orbital_surface": True,
+            "calculation_id": cid,
+            "field_id": fid,
+            "orbital": int(orbital),
+            "spin": spin,
+            "meshes": meshes,
+            "reference_coords": f.coords,
+            "note": "± colors indicate orbital phase, not positive/negative charge.",
+        }
+
+    def link_checkpoint(self, log_id, checkpoint_id):
+        log = self.get(log_id)
+        chk = self.get(checkpoint_id)
+        if not self.checkpoints.get(checkpoint_id):
+            raise ValueError("연결 대상은 열린 chk/fchk여야 합니다.")
+        if log.kind in ("checkpoint", "cube", "input", "builder", "structure"):
+            raise ValueError("로그 계산을 먼저 선택한 뒤 chk/fchk를 연결하세요.")
+        if log.atoms != chk.atoms or not log.frames or not chk.frames:
+            raise ValueError("원자 종류·순서·구조가 일치해야 합니다.")
+        if (log.charge is not None and chk.charge is not None and log.charge != chk.charge) or (
+            log.multiplicity is not None
+            and chk.multiplicity is not None
+            and log.multiplicity != chk.multiplicity
+        ):
+            raise ValueError("전하/다중도가 다릅니다. 다른 계산 파일을 연결할 수 없습니다.")
+        fitted = alignment(log, chk)
+        if fitted["rmsd_A"] > 0.002:
+            raise ValueError(
+                f"최종 구조가 다릅니다 (정렬 RMSD {fitted['rmsd_A']:.6f} Å). 같은 구조의 파일만 연결하세요."
+            )
+        # The merged viewer uses checkpoint axes, so cubegen meshes overlay correctly.
+        rotation = np.asarray(fitted["rotation"])
+        x = np.asarray(log.frames[-1]["coords"])
+        y = np.asarray(chk.frames[-1]["coords"])
+        new = copy.deepcopy(log)
+        new.name = log.name + " + checkpoint"
+        new.properties["linked_sources"] = [log.source, chk.source]
+        new.properties["formatted_checkpoint"] = self.checkpoints[checkpoint_id]
+        new.properties["link_rmsd_A"] = fitted["rmsd_A"]
+        for f in new.frames:
+            f["coords"] = ((np.asarray(f["coords"]) - x.mean(0)) @ rotation.T + y.mean(0)).tolist()
+        for record in new.force_records:
+            record["forces_hartree_bohr"] = (
+                np.asarray(record["forces_hartree_bohr"]) @ rotation.T
+            ).tolist()
+            record["coordinate_system"] = "aligned to checkpoint axes"
+        for mode in new.modes:
+            if len(mode.get("displacements", [])) == len(log.atoms):
+                mode["displacements"] = (np.asarray(mode["displacements"]) @ rotation.T).tolist()
+        new.orbitals = copy.deepcopy(chk.orbitals)
+        if (
+            new.frames[-1].get("force_record") is None
+            and chk.frames[-1].get("force_record") is not None
+        ):
+            new.frames[-1]["force_record"] = len(new.force_records)
+            new.force_records.append(
+                copy.deepcopy(chk.force_records[chk.frames[-1]["force_record"]])
+            )
+        if (
+            new.frames[-1].get("energy_hartree") is None
+            and chk.frames[-1].get("energy_hartree") is not None
+        ):
+            new.frames[-1]["energy_hartree"] = chk.frames[-1]["energy_hartree"]
+            new.frames[-1]["energy_kind"] = "checkpoint / " + chk.frames[-1].get(
+                "energy_kind", "Total Energy"
+            )
+        if not new.modes:
+            new.modes = copy.deepcopy(chk.modes)
+            for mode in new.modes:
+                mode["reference_frame"] = len(new.frames) - 1
+        if "polarizability_au" in chk.properties:
+            new.properties["polarizability_au"] = copy.deepcopy(chk.properties["polarizability_au"])
+            new.properties.setdefault("polarizability_records", []).extend(
+                copy.deepcopy(chk.properties.get("polarizability_records", []))
+            )
+        new.properties["checkpoint_link_note"] = (
+            "Geometry, atom order, charge and spin validated. Method/state consistency still requires the original calculation inputs."
+        )
+        new.warnings.append(
+            "연결 전후 method/basis/전자 상태가 같은지 원본 입력을 확인하세요. 구조는 checkpoint 좌표계로 정렬했습니다."
+        )
+        cid = self.add(new)
+        self.checkpoints[cid] = self.checkpoints[checkpoint_id]
+        if log_id in self.reload_sources:
+            self.reload_sources[cid] = self.reload_sources[log_id]
+        return {"ids": [cid]}
+
     def action(self, name, cid=None, **p):
         c = self.get(cid) if cid else None
+        if name == "reload_source":
+            return self.reload_source(cid)
+        if name == "frame_analysis":
+            return clean(frame_analysis(c, int(p.get("frame", -1))))
+        if name == "orbital_analysis":
+            return orbital_analysis(c)
+        if name == "link_checkpoint":
+            return self.link_checkpoint(cid, p["checkpoint_id"])
+        if name == "orbital_surface":
+            return {
+                "task": self.submit(
+                    "MO surface",
+                    lambda t: self.orbital_surface(
+                        cid,
+                        p.get("spin", "alpha"),
+                        p["orbital"],
+                        p.get("grid", "coarse"),
+                        p.get("level", 0.03),
+                        t,
+                    ),
+                )
+            }
         if name == "spectrum":
             return spectrum(c, **p)
         if name == "measure":
@@ -412,6 +599,8 @@ class Engine:
             c = Calculation(**{k: v for k, v in row.items() if k in allowed})
             # A project file is a snapshot, not permission to read arbitrary host paths.
             c.source = ""
+            for key in ["formatted_checkpoint", "checkpoint_file", "linked_sources"]:
+                c.properties.pop(key, None)
             c.properties.pop("field_id", None)
             c.warnings.append("프로젝트 snapshot: 공간장·원본 파일은 다시 연결해야 합니다.")
             ids.append(self.add(c))

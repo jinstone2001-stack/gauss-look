@@ -2,7 +2,7 @@
 """python GaussLook.py [--web --port 8888] [result.log ...]"""
 
 from __future__ import annotations
-import argparse, json, os, sys
+import argparse, json, os, sys, time
 from pathlib import Path
 
 
@@ -18,7 +18,7 @@ def main(argv=None):
     p.add_argument("--check", action="store_true", help="GUI 없이 설치 환경 확인")
     p.add_argument("--json", action="store_true", help="파일 분석 결과를 JSON으로 출력")
     p.add_argument("--quit-after", type=int, help=argparse.SUPPRESS)
-    p.add_argument("--version", action="version", version="GaussLook 1.0.0")
+    p.add_argument("--version", action="version", version="GaussLook 1.1.0")
     args = p.parse_args(argv)
     try:
         from gausslook.engine import Engine
@@ -35,7 +35,7 @@ def main(argv=None):
         print(
             json.dumps(
                 {
-                    "version": "1.0.0",
+                    "version": "1.1.0",
                     "python": sys.version,
                     "DISPLAY": bool(os.environ.get("DISPLAY")),
                     "utilities": e.utilities,
@@ -53,7 +53,16 @@ def main(argv=None):
         return 0
     for path in args.files:
         try:
-            e.load(path)
+            loaded = e.load(path)
+            if loaded.get("task"):
+                tid = loaded["task"]
+                if not args.json:
+                    print(f"{path}: formchk 변환 중…", flush=True)
+                while e.task(tid)["status"] in ("queued", "running"):
+                    time.sleep(0.1)
+                task = e.task(tid)
+                if task["status"] != "done":
+                    raise ValueError(task.get("error", task["status"]))
         except Exception as exc:
             print(f"{path}: {exc}", file=sys.stderr)
     if args.demo:
@@ -76,7 +85,7 @@ def main(argv=None):
             e.close()
             return 2
         print(
-            f"GaussLook 1.0.0\nURL: http://127.0.0.1:{server.server_port}\n서버 root: {e.root}\nMobaXterm: 같은 포트로 Local port forwarding 후 현재 PC 브라우저에서 URL을 여세요.\nCtrl+C로 종료합니다.",
+            f"GaussLook 1.1.0\nURL: http://127.0.0.1:{server.server_port}\n서버 root: {e.root}\nMobaXterm: 같은 포트로 Local port forwarding 후 현재 PC 브라우저에서 URL을 여세요.\nCtrl+C로 종료합니다.",
             flush=True,
         )
         try:

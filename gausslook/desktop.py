@@ -8,6 +8,8 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog, font
 from .model import ELEMENTS, COLORS, bonds, xyz_text
 from .analysis import measure
+from .desktop_core import CorePanels
+from .help_ui import install_tooltips
 
 
 class MoleculeCanvas(tk.Canvas):
@@ -21,6 +23,7 @@ class MoleculeCanvas(tk.Canvas):
         self.zoom = 1.0
         self.screen = []
         self.mesh = None
+        self.vectors = None
         self.labels = False
         self.style = "ball"
         self.show_h = True
@@ -75,6 +78,7 @@ class MoleculeCanvas(tk.Canvas):
             self.zoom = 1.0
             self.selected = []
             self.mesh = None
+            self.vectors = None
         self.render()
 
     def render(self):
@@ -108,9 +112,10 @@ class MoleculeCanvas(tk.Canvas):
 
         p = project(self.coords)
         self.screen = p
-        if self.mesh:
-            verts = project(np.asarray(self.mesh["vertices"]))
-            faces = self.mesh["faces"]
+        mesh_list = self.mesh if isinstance(self.mesh, list) else [self.mesh] if self.mesh else []
+        for mesh in mesh_list:
+            verts = project(np.asarray(mesh["vertices"]))
+            faces = mesh["faces"]
             step = max(1, len(faces) // 2200)
             draw = []
             for f in faces[::step]:
@@ -119,7 +124,7 @@ class MoleculeCanvas(tk.Canvas):
             for depth, points in sorted(draw, key=lambda v: v[0]):
                 self.create_polygon(
                     points[:, :2].reshape(-1).tolist(),
-                    fill="#366e92" if self.mesh["level"] > 0 else "#9c526b",
+                    fill="#366e92" if mesh["level"] > 0 else "#9c526b",
                     outline="",
                     stipple="gray50",
                 )
@@ -158,6 +163,14 @@ class MoleculeCanvas(tk.Canvas):
                     fill="#e6edf5",
                     font=("Arial", 10),
                 )
+
+        if self.vectors is not None and np.asarray(self.vectors).shape == self.coords.shape:
+            vectors = np.asarray(self.vectors, float)
+            maximum = float(np.linalg.norm(vectors, axis=1).max())
+            if maximum > 0:
+                ends = project(self.coords + vectors / maximum * 0.9)
+                for a, b in zip(p, ends):
+                    self.create_line(*a[:2], *b[:2], fill="#ffd078", width=2, arrow="last")
 
 
 class PlotCanvas(tk.Canvas):
@@ -208,11 +221,11 @@ class PlotCanvas(tk.Canvas):
         self.callback(self.data["kind"], s["index"])
 
 
-class App:
+class App(CorePanels):
     def __init__(self, engine, quit_after=None):
         self.engine = engine
         self.root = tk.Tk()
-        self.root.title("GaussLook 1.0 · Gaussian 16 Analysis Studio")
+        self.root.title("GaussLook 1.1 · Gaussian 16 Analysis Studio")
         self.root.geometry("1440x900")
         self.root.minsize(1050, 700)
         self.calc = None
@@ -221,6 +234,7 @@ class App:
         self.tick = 0
         self.mode_index = None
         self.rows = []
+        self.rendered_frame = None
         families = set(font.families(self.root))
         chosen = next(
             (
@@ -253,9 +267,10 @@ class App:
             ("XYZ", self.export_xyz),
             ("보고서 JSON", self.export_report),
             ("표시 설정", self.settings),
+            ("도움말", self.show_help),
         ]:
             ttk.Button(bar, text=label, command=self.safe(fn)).pack(side="left", padx=3)
-        ttk.Label(bar, text="GaussLook 1.0", font=(chosen, 17, "bold")).pack(side="right", padx=12)
+        ttk.Label(bar, text="GaussLook 1.1", font=(chosen, 17, "bold")).pack(side="right", padx=12)
         panes = ttk.Panedwindow(self.root, orient="horizontal")
         panes.pack(fill="both", expand=True, padx=8, pady=4)
         left = ttk.Frame(panes, width=225)
@@ -303,6 +318,8 @@ class App:
             timebar, from_=0, to=0, orient="horizontal", showvalue=False, command=self.slider
         )
         self.scale.pack(side="left", fill="x", expand=True)
+        self.scale.bind("<ButtonPress-1>", lambda e: self.stop())
+        self.scale.bind("<KeyPress>", lambda e: self.stop())
         self.frame_label = ttk.Label(timebar, text="")
         self.frame_label.pack(side="left")
         ttk.Button(timebar, text="정지", command=self.stop).pack(side="left")
@@ -313,16 +330,42 @@ class App:
         )
         right = ttk.Frame(panes, width=470)
         panes.add(right, weight=2)
-        self.notebook = ttk.Notebook(right)
+        self.panel_names = {
+            name: name
+            for name in [
+                "개요",
+                "MO·표면",
+                "진동",
+                "에너지·Force",
+                "분극률",
+                "수렴·TS",
+                "물성",
+                "구조·입력",
+                "도구",
+                "도움말",
+            ]
+        }
+        self.panel_select = ttk.Combobox(
+            right, values=list(self.panel_names.values()), state="readonly"
+        )
+        self.panel_select.current(0)
+        self.panel_select.pack(fill="x", pady=4)
+        self.panel_select.bind(
+            "<<ComboboxSelected>>",
+            lambda e: self.select_panel(list(self.panels)[self.panel_select.current()]),
+        )
+        theme.layout("Inspector.TNotebook.Tab", [])
+        self.notebook = ttk.Notebook(right, style="Inspector.TNotebook")
         self.notebook.pack(fill="both", expand=True)
         self.panels = {}
-        for title in ["개요", "수렴·TS", "진동", "MO·표면", "물성", "구조·입력", "도구"]:
+        for title in self.panel_names:
             f = ttk.Frame(self.notebook, padding=8)
             self.notebook.add(f, text=title)
             self.panels[title] = f
         ttk.Button(bar, text="Cancel task", command=self.cancel_task).pack(side="left", padx=3)
         self.current_task = None
         self.build_panels()
+        self.root.bind("<F1>", self.show_help)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.refresh()
         if not self.cjk:
@@ -330,6 +373,7 @@ class App:
             self.status.configure(
                 text="English fallback: CJK font is unavailable in this Tk/X11 build. Web mode supports Korean."
             )
+        install_tooltips(self.root, english=not self.cjk)
         if self.engine.calcs:
             self.load(next(iter(self.engine.calcs)))
         if quit_after:
@@ -355,72 +399,9 @@ class App:
             scroll.pack(side="right", fill="y")
             text.pack(fill="both", expand=True)
             self.texts[name] = text
-        f = self.panels["진동"]
-        row = ttk.Frame(f)
-        row.pack(fill="x")
-        self.spec = ttk.Combobox(
-            row, values=["IR", "Raman", "VCD", "UV-Vis", "ECD", "NMR"], width=8, state="readonly"
-        )
-        self.spec.set("IR")
-        self.spec.pack(side="left")
-        ttk.Label(row, text="FWHM").pack(side="left")
-        self.width = ttk.Entry(row, width=7)
-        self.width.insert(0, "12")
-        self.width.pack(side="left")
-        ttk.Button(row, text="Plot", command=self.safe(self.make_spectrum)).pack(side="left")
-        self.spec.bind("<<ComboboxSelected>>", lambda e: self.set_width())
-        r = ttk.Frame(f)
-        r.pack(fill="x", pady=6)
-        ttk.Label(r, text="배율").pack(side="left")
-        self.freqscale = ttk.Entry(r, width=6)
-        self.freqscale.insert(0, "1")
-        self.freqscale.pack(side="left")
-        ttk.Label(r, text="진폭").pack(side="left")
-        self.amp = ttk.Entry(r, width=6)
-        self.amp.insert(0, ".5")
-        self.amp.pack(side="left")
-        ttk.Button(r, text="정지", command=self.stop).pack(side="left")
-        ttk.Button(r, text="± XYZ", command=self.safe(self.export_displacement)).pack(side="left")
-        self.mode_table = ttk.Treeview(
-            f, columns=("frequency", "IR", "Raman"), show="headings", height=16
-        )
-        for key in ("frequency", "IR", "Raman"):
-            self.mode_table.heading(key, text=key)
-            self.mode_table.column(key, width=95, stretch=True)
-        self.mode_table.pack(fill="both", expand=True)
-        self.mode_table.bind("<<TreeviewSelect>>", self.mode_pick)
-        f = self.panels["MO·표면"]
-        self.mo_text = tk.Text(f, height=12, wrap="none", width=48)
-        self.mo_text.pack(fill="both", expand=True)
-        r = ttk.Frame(f)
-        r.pack(fill="x", pady=5)
-        self.spin = ttk.Combobox(r, values=["alpha", "beta"], width=7, state="readonly")
-        self.spin.set("alpha")
-        self.spin.pack(side="left")
-        self.mo = ttk.Entry(r, width=5)
-        self.mo.insert(0, "1")
-        self.mo.pack(side="left")
-        self.field_kind = ttk.Combobox(
-            r, values=["mo", "density", "potential", "spin"], width=9, state="readonly"
-        )
-        self.field_kind.set("mo")
-        self.field_kind.pack(side="left")
-        ttk.Button(r, text="cubegen", command=self.safe(self.generate)).pack(side="left")
-        self.field_combo = ttk.Combobox(f, state="readonly")
-        self.field_combo.pack(fill="x")
-        r = ttk.Frame(f)
-        r.pack(fill="x")
-        self.level = ttk.Entry(r, width=9)
-        self.level.insert(0, ".03")
-        self.level.pack(side="left")
-        ttk.Button(r, text="+ 표면", command=self.safe(lambda: self.surface(1))).pack(side="left")
-        ttk.Button(r, text="− 표면", command=self.safe(lambda: self.surface(-1))).pack(side="left")
-        ttk.Button(r, text="숨기기", command=lambda: self.hide_surface()).pack(side="left")
-        ttk.Label(
-            f,
-            text="X11 표면은 CPU preview입니다. 복잡한 표면은 웹 모드를 권장합니다.",
-            wraplength=420,
-        ).pack(fill="x", pady=8)
+        self.build_vibration_panel(self.panels["진동"])
+        self.build_mo_panel(self.panels["MO·표면"])
+        self.build_core_panels()
         f = self.panels["구조·입력"]
         self.smiles = ttk.Entry(f)
         self.smiles.insert(0, "c1ccccc1")
@@ -490,7 +471,19 @@ class App:
         overview = {
             k: v
             for k, v in data.items()
-            if k not in ["frames", "modes", "orbitals", "properties", "capabilities", "quality"]
+            if k
+            not in [
+                "frames",
+                "modes",
+                "orbitals",
+                "properties",
+                "capabilities",
+                "quality",
+                "force_records",
+                "orbital_analysis",
+                "polarizability_analysis",
+                "final_frame_analysis",
+            ]
         }
         quality_data = {"quality": data["quality"], "convergence": data["convergence"][-4:]}
         if not self.cjk:
@@ -512,22 +505,11 @@ class App:
             ("물성", data["properties"]),
         ]:
             self.set_text(self.texts[name], json.dumps(value, ensure_ascii=not self.cjk, indent=2))
-        self.mode_table.delete(*self.mode_table.get_children())
-        for i, m in enumerate(self.calc.modes):
-            self.mode_table.insert(
-                "",
-                "end",
-                iid=str(i),
-                values=(m["frequency_cm1"], m.get("ir_km_mol", "—"), m.get("raman_activity", "—")),
-            )
-        rows = []
-        for spin, o in self.calc.orbitals.items():
-            rows.append(spin + "    MO      eV       occupation")
-            rows.extend(
-                f'{i+1:5d} {v:12.5f} {o["occupations"][i]:6.2f}'
-                for i, v in enumerate(o["energies_eV"])
-            )
-        self.set_text(self.mo_text, "\n".join(rows))
+        self.fill_modes()
+        self.fill_mos()
+        self.fill_frame_table()
+        self.fill_polar()
+        self.update_frame_analysis()
         self.charge.delete(0, "end")
         self.charge.insert(0, str(self.calc.charge or 0))
         self.mult.delete(0, "end")
@@ -541,6 +523,10 @@ class App:
 
     def draw(self, reset=False, coords=None):
         if self.calc and self.calc.frames:
+            key = (self.calc.id, self.frame)
+            if key != self.rendered_frame:
+                self.viewer.mesh = None
+                self.rendered_frame = key
             self.viewer.set_structure(
                 self.calc.atoms,
                 coords if coords is not None else self.calc.frames[self.frame]["coords"],
@@ -576,7 +562,9 @@ class App:
     def slider(self, value):
         if self.calc:
             self.frame = min(len(self.calc.frames) - 1, int(float(value)))
+            self.viewer.mesh = None
             self.draw()
+            self.update_frame_analysis()
 
     def stop(self):
         if self.animation:
@@ -607,14 +595,17 @@ class App:
         m = self.calc.modes[index]
         if len(m.get("displacements", [])) != len(self.calc.atoms):
             raise ValueError("변위 데이터가 없습니다.")
+        self.frame = m.get("reference_frame", len(self.calc.frames) - 1)
+        self.scale.set(self.frame)
+        self.viewer.mesh = None
+        self.update_mode_arrows()
         self.tick = 0
+        base = np.array(self.calc.frames[self.frame]["coords"])
 
         def step():
-            a = float(self.amp.get()) * math.sin(self.tick * 0.2)
+            a = float(self.amp.get()) * math.sin(self.tick * 0.2 * float(self.speed.get()))
             self.tick += 1
-            coords = np.array(self.calc.frames[self.frame]["coords"]) + a * np.array(
-                m["displacements"]
-            )
+            coords = base + a * np.array(m["displacements"])
             self.draw(coords=coords)
             self.animation = self.root.after(70, step)
 
@@ -687,6 +678,20 @@ class App:
             self.watch(result["task"])
             return
         self.refresh()
+        if result.get("orbital_surface"):
+            if not self.calc or self.calc.id != result["calculation_id"]:
+                return
+            self.stop()
+            self.frame = len(self.calc.frames) - 1
+            self.scale.set(self.frame)
+            self.draw(coords=result["reference_coords"])
+            self.viewer.mesh = result["meshes"]
+            self.viewer.vectors = None
+            self.viewer.render()
+            self.status.configure(
+                text=f"MO {result['orbital']} {result['spin']} / +/- phase surface / CPU preview"
+            )
+            return
         if result.get("ids"):
             self.load(result["ids"][0])
 
@@ -737,8 +742,13 @@ class App:
             self.watch(self.engine.submit("파일 읽기", run))
 
     def reload(self):
-        if self.calc and self.calc.source:
-            self.watch(self.engine.submit("새로고침", lambda t: self.engine.load(self.calc.source)))
+        if self.calc:
+            cid = self.calc.id
+            self.watch(
+                self.engine.submit(
+                    "Reload source", lambda t: self.engine.action("reload_source", cid)
+                )
+            )
 
     def save(self, title, ext, text):
         p = filedialog.asksaveasfilename(parent=self.root, title=title, defaultextension=ext)
@@ -784,9 +794,11 @@ class App:
         )
         if a is None:
             return
-        coords = np.array(self.calc.frames[self.frame]["coords"]) + a * np.array(
-            self.calc.modes[self.mode_index]["displacements"]
-        )
+        coords = np.array(
+            self.calc.frames[
+                self.calc.modes[self.mode_index].get("reference_frame", len(self.calc.frames) - 1)
+            ]["coords"]
+        ) + a * np.array(self.calc.modes[self.mode_index]["displacements"])
         self.save("모드 변위 XYZ", ".xyz", xyz_text(self.calc, coords=coords))
 
     def generate(self):
@@ -798,7 +810,7 @@ class App:
                     kind=self.field_kind.get(),
                     orbital=int(self.mo.get()),
                     spin=self.spin.get(),
-                    grid="coarse",
+                    grid=self.mo_grid.get(),
                 )
             )
 
@@ -876,7 +888,7 @@ class App:
             self.output,
             (Path(__file__).resolve().parent.parent / "docs/FEATURE_STATUS.md").read_text(),
         )
-        self.notebook.select(self.panels["도구"])
+        self.select_panel("도구")
 
     def settings(self):
         win = tk.Toplevel(self.root)
@@ -899,6 +911,7 @@ class App:
         ttk.Button(win, text="적용", command=self.safe(apply)).pack(pady=10)
         if not self.cjk:
             self.english_labels(win)
+        install_tooltips(win, english=not self.cjk)
 
     def english_labels(self, parent=None):
         mapping = {
@@ -908,6 +921,7 @@ class App:
             "프로젝트 저장": "Save project",
             "보고서 JSON": "Report JSON",
             "표시 설정": "Display settings",
+            "도움말": "Help",
             "번호": "Labels",
             "중심": "Center",
             "선택 해제": "Clear selection",
@@ -941,18 +955,22 @@ class App:
                 pass
             self.english_labels(widget)
         if parent is None:
-            for name, label in zip(
-                self.panels,
-                [
-                    "Summary",
-                    "Quality / TS",
-                    "Vibrations",
-                    "MO / Fields",
-                    "Properties",
-                    "Build / Input",
-                    "Tools",
-                ],
-            ):
+            labels = [
+                "Summary",
+                "MO / Fields",
+                "Vibrations",
+                "Energy / Force",
+                "Polarizability",
+                "Quality / TS",
+                "Properties",
+                "Build / Input",
+                "Tools",
+                "Help",
+            ]
+            self.panel_names = dict(zip(self.panels, labels))
+            self.panel_select["values"] = labels
+            self.panel_select.current(0)
+            for name, label in self.panel_names.items():
                 self.notebook.tab(self.panels[name], text=label)
 
     def close(self):
