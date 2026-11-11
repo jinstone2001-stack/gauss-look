@@ -29,6 +29,7 @@ class Engine:
         self.checkpoints = {}
         self.reload_sources = {}
         self.orbital_cache = {}
+        self.mesh_cache = {}
         self.pool = ThreadPoolExecutor(max_workers=2)
         self.lock = threading.RLock()
         self.work = Path(tempfile.mkdtemp(prefix="gausslook-"))
@@ -77,7 +78,7 @@ class Engine:
             )
             return {"ids": [cid], "field_id": fid}
         if path.suffix.lower() == ".glproj":
-            return self.load_project(json.loads(path.read_text()))
+            return self.load_project(json.loads(path.read_text(encoding="utf-8")))
         cs = parse_file(path)
         ids = [self.add(c) for c in cs]
         for cid in ids:
@@ -281,7 +282,7 @@ class Engine:
     def orbital_surface(self, cid, spin, orbital, grid, level, task):
         c = self.get(cid)
         level = abs(float(level))
-        if level <= 0:
+        if not np.isfinite(level) or level <= 0:
             raise ValueError("MO 등치값은 양수여야 합니다.")
         source = self.checkpoints.get(cid)
         if not source:
@@ -295,9 +296,10 @@ class Engine:
             self.orbital_cache[key] = fid
         f = self.fields[fid]
         meshes = []
+        low, high = f.values[:, :, :, 0].min(), f.values[:, :, :, 0].max()
         for signed in (level, -level):
-            if f.values[:, :, :, 0].min() < signed < f.values[:, :, :, 0].max():
-                meshes.append(isosurface(f, level=signed, max_faces=45000))
+            if low < signed < high:
+                meshes.append(self.mesh(fid, level=signed, max_faces=45000))
         if not meshes:
             raise ValueError(
                 "선택 등치값에서 MO 표면이 없습니다. 등치값을 줄이거나 격자를 확인하세요."
@@ -313,6 +315,24 @@ class Engine:
             "reference_coords": f.coords,
             "note": "± colors indicate orbital phase, not positive/negative charge.",
         }
+
+    def mesh(self, field_id, level=0.03, channel=0, max_faces=80000):
+        f = self.fields[field_id]
+        level, channel, max_faces = float(level), int(channel), int(max_faces)
+        if not np.isfinite(level) or not 0 <= channel < f.values.shape[3] or max_faces <= 0:
+            raise ValueError("등치값·field 번호·표면 face 수를 확인하세요.")
+        # Engine-owned field grids never change; field operations create a new id.
+        key = (field_id, level, channel, max_faces)
+        with self.lock:
+            cached = self.mesh_cache.get(key)
+        if cached is not None:
+            return dict(cached)
+        mesh = isosurface(f, level=level, channel=channel, max_faces=max_faces)
+        with self.lock:
+            self.mesh_cache[key] = mesh
+            if len(self.mesh_cache) > 8:
+                del self.mesh_cache[next(iter(self.mesh_cache))]
+        return dict(mesh)
 
     def link_checkpoint(self, log_id, checkpoint_id):
         log = self.get(log_id)
@@ -430,9 +450,9 @@ class Engine:
         if name == "field_info":
             return self.fields[p["field_id"]].info()
         if name == "mesh":
-            f = self.fields[p.pop("field_id")]
+            fid = p.pop("field_id")
             mapped = p.pop("mapped_field", None)
-            mesh = isosurface(f, **p)
+            mesh = self.mesh(fid, **p)
             if mapped:
                 mesh["mapped_values"] = clean(
                     sample(self.fields[mapped], mesh["vertices"]).tolist()

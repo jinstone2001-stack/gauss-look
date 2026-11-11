@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 - 2026-11-11
+
+- Embed structured Gaussian settings, preview and save in the native and web Build / Input workspace; preserve SMILES and advanced input.
+- Coalesce viewer redraws and wheel input, cache native geometry work, and reuse the web model during vibration and display changes.
+- Remove redundant checkpoint numeric scans and cube text copies; reuse the most recent eight field/isovalue meshes alongside source-aware MO cube caching.
+- Improve light-theme contrast, folder/file-type distinction, Korean font selection and compact display settings.
+- Preserve drafts and selected scientific records when changing theme/language; align native atom hit testing with the drawn radius.
+- Add native, mocked web/API, field parsing and mesh-cache regressions; retain scientific units, source provenance and original grid data.
+- Preserve previous version branches and LICENSE; publish the validated release as `ver-1.3` and `main`.
+
 ## 1.2.0 - 2026-11-11
 
 - Add selectable Korean/English UI and persistent dark/light and display preferences in both native X11 and web frontends.

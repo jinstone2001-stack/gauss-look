@@ -19,7 +19,7 @@ const EN_UI = {
   "진동 모드를 먼저 선택하세요.":"Select a vibration mode first.", "변위 데이터가 없습니다.":"No displacement data are available.", "기획서 140개 항목의 구현 상태입니다. 조건부/부분/후속 구현 항목을 완전 지원으로 표시하지 않습니다.":"Implementation status of the 140 planned features. Conditional, partial and planned features are identified explicitly.", "스펙트럼 또는 경로를 선택하세요.":"Select a spectrum or energy path.", "현재 추적 중인 분석 작업이 없습니다.":"No analysis task is currently being tracked.", "작업 진행 중…":"Working…", "DEMO · 화면 시연용 합성 자료. 실제 Gaussian 결과가 아닙니다.":"DEMO · Synthetic data for UI demonstration; not a Gaussian result.",
   "이름":"Name", "폴더":"Folder", "상위 폴더":"↑ Parent folder", "서버 디렉터리 경로":"Server directory path", "이동":"Go", "현재 폴더":"Current folder", "경로를 입력하거나 붙여넣고 Enter를 누르세요. 서버의 허용된 루트 안에서 탐색합니다.":"Type or paste a path and press Enter. Browsing stays within the server's allowed root.", "숫자 오름차순 / 내림차순 정렬 (빈 값은 마지막)":"Sort numerically ascending / descending (missing values last)",
   "표시 설정":"Display settings", "폰트":"Font", "글자 크기 px":"Font size (px)", "Viewer 배경":"Viewer background", "적용":"Apply", "적용 / 저장":"Apply / save", "기본값 복원":"Restore defaults", "테마":"Theme", "다크":"Dark", "라이트":"Light", "언어":"Language", "글꼴·화면":"Font · Appearance", "구조 뷰어":"Structure viewer", "원소별 색상":"Element colors", "원자 크기":"Atom scale", "결합 반지름 (Å)":"Bond radius (Å)", "선택 색상":"Selection color", "레이블 색상":"Label color", "레이블 크기 px":"Label size (px)", "원자 번호 표시":"Show atom labels", "수소 표시":"Show hydrogens", "드래그: 회전 · 휠: 확대 · 오른쪽 드래그: 이동 · 원자 클릭: 선택":"Drag: rotate · Wheel: zoom · Right drag: pan · Click atom: select", "표시 설정을 저장했습니다.":"Display settings saved.",
-  "GaussLook 도움말 · 1.2":"GaussLook Help · 1.2", "버튼 이름 / HOMO / frequency / Force / 파일 확장자 검색":"Search buttons / HOMO / frequency / Force / file extension", "예: Reload source, imaginary, polarizability":"Example: Reload source, imaginary, polarizability", "관련 버튼":"Related controls", "검색된 도움말이 없습니다.":"No help topics match your search.",
+  "GaussLook 도움말 · 1.3":"GaussLook Help · 1.3", "버튼 이름 / HOMO / frequency / Force / 파일 확장자 검색":"Search buttons / HOMO / frequency / Force / file extension", "예: Reload source, imaginary, polarizability":"Example: Reload source, imaginary, polarizability", "관련 버튼":"Related controls", "검색된 도움말이 없습니다.":"No help topics match your search.",
   "Spin / 공간 오비탈":"Spin / spatial orbital", "선택 MO 번호 (1부터)":"Selected MO number (starts at 1)", "점유":"Occupation", "MO 등치값 |ψ|":"MO isovalue |ψ|", "격자 (미세할수록 오래 걸림)":"Grid (finer takes longer)", "선택 MO ±표면":"Selected MO ± surfaces", "표면 숨기기":"Hide surfaces", "같은 계산의 chk/fchk":"chk/fchk from the same calculation", "로그·chk 연결":"Link log · chk", "Cube · density · ESP 도구":"Cube · density · ESP tools", "공간장":"Scalar field", "Gaussian cubegen으로 생성":"Generate with Gaussian cubegen", "열려 있는 cube":"Open cube", "Field 채널 (0부터)":"Field channel (starts at 0)", "+ 표면":"+ surface", "− 표면":"− surface", "cube를 먼저 여세요.":"Open a cube first.", "cube 정보·적분":"Cube information · integral",
   "에너지 차이는 orbital gap입니다. 여기 에너지·고분자 band gap과 동일한 값으로 해석하지 않습니다. ±표면 색은 오비탈의 위상입니다.":"The energy difference is an orbital gap, distinct from excitation energies and polymer band gaps. Surface colors indicate orbital phase.",
   "MO 에너지가 없습니다. orbital 정보를 출력한 log 또는 chk/fchk를 여세요.":"No MO energies are available. Open a log with orbital output or a chk/fchk file.",
@@ -47,6 +47,7 @@ function translate(text) {
 function t(text) { return translate(text); }
 function ui(ko, en) { return settings.language === "en" ? en : ko; }
 Object.assign(EN_UI, {
+  "한국어 / 시스템 글꼴":"Korean / system fonts", "크기":"Size", "파일":"File",
   "제목":"Title", "용매 (SMD)":"Solvent (SMD)", "Arial / 맑은 고딕":"Arial / Malgun Gothic", "Calibri / 굴림":"Calibri / Gulim",
   "고유값 / a.u.":"Eigenvalues / a.u.", "부분·조건부":"Partial / conditional", "지원":"Supported", "후속 구현":"Planned",
   "계산 종료":"Calculation termination", "기하 최적화":"Geometry optimization", "정지점 분류":"Stationary point classification", "파동함수 안정성":"Wavefunction stability",
@@ -65,6 +66,7 @@ Object.assign(EN_UI, {
 let helpData = { topics: [] },
   activeSpin = "alpha",
   activeMO = null,
+  activePolar = null,
   modeAmplitude = 0.5,
   modeSpeed = 1,
   modeVectors = false,
@@ -91,7 +93,7 @@ function openHelp() {
   renderPanel();
 }
 function renderHelp(parent) {
-  parent.append(node("h2", "GaussLook 도움말 · 1.2"));
+  parent.append(node("h2", "GaussLook 도움말 · 1.3"));
   const search = field(
     parent,
     "버튼 이름 / HOMO / frequency / Force / 파일 확장자 검색",
@@ -230,12 +232,13 @@ function renderMO(parent) {
       svg.append(e);
       return e;
     }
-    item("text", { x: 5, y: 15, fill: "#a2b7ce", "font-size": 12 }, "eV");
+    const light = settings.theme === "light";
+    item("text", { x: 5, y: 15, fill: light ? "#3e5269" : "#a2b7ce", "font-size": 12 }, "eV");
     rows.forEach((r, i) => {
       const x = 48 + (i * 440) / Math.max(1, rows.length - 1),
         y = 146 - ((r.energy_eV - lo) / span) * 110,
         color =
-          r.mo === activeMO ? "#57d1c9" : r.occupation ? "#65bafa" : "#f29eb0";
+          r.mo === activeMO ? (light ? "#00676c" : "#57d1c9") : r.occupation ? (light ? "#215a96" : "#65bafa") : (light ? "#9b2852" : "#f29eb0");
       const line = item("line", {
         x1: x - 20,
         x2: x + 20,
@@ -262,7 +265,7 @@ function renderMO(parent) {
         {
           x,
           y: y + 18,
-          fill: "#c5d3e4",
+          fill: light ? "#203146" : "#c5d3e4",
           "font-size": 11,
           "text-anchor": "middle",
         },
@@ -356,7 +359,7 @@ function renderMO(parent) {
         channel: +channel.value,
       });
       addMesh(mesh);
-      viewer.render();
+      requestViewerRender();
       status(
         `surface ${mesh.level}: ${mesh.faces.length} triangles · preview stride ${mesh.preview_stride}`,
       );
@@ -383,7 +386,7 @@ function addMesh(mesh) {
 function clearShapes() {
   if (viewer) {
     viewer.removeAllShapes();
-    viewer.render();
+    requestViewerRender();
   }
   meshes = [];
   vectorShapes = [];
@@ -405,7 +408,7 @@ function drawVectors(coords, vectors) {
       }),
     );
   });
-  viewer.render();
+  requestViewerRender();
 }
 function renderVibrations(parent) {
   const modes = calc.modes,
@@ -726,7 +729,7 @@ function renderPolar(parent) {
         i,
         `${r.source} · W=${r.frequency_au ?? "?"} a.u.`,
       ]),
-      data.default_index,
+      records[activePolar] ? activePolar : data.default_index,
     ),
     content = node("div");
   parent.append(content);
@@ -771,6 +774,6 @@ function renderPolar(parent) {
       ),
     );
   }
-  source.onchange = show;
+  source.onchange = () => { activePolar = +source.value; show(); };
   show();
 }

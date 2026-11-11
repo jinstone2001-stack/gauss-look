@@ -16,7 +16,7 @@ let state = {},
     language: "ko", theme: "dark", labels: false, hydrogens: true,
     style: "ball", background: "#101b2b", atomScale: 0.3, bondRadius: 0.14,
     selection: "#00d8e6", labelColor: "#f1f5fa", labelSize: 12,
-    font: 'Arial,"Malgun Gothic",sans-serif', fontSize: 14,
+    font: '"Malgun Gothic","Noto Sans CJK KR",Arial,sans-serif', fontSize: 14,
     elementColors: { H: "#e8edf4", C: "#7891ad", N: "#4d8eff", O: "#ff5b68", F: "#5bd684", P: "#f4a340", S: "#ebd14b", Cl: "#5bd684", Br: "#b56d4b", I: "#aa80db", Sn: "#8bcad5" },
   };
 const defaultSettings = JSON.parse(JSON.stringify(settings));
@@ -189,23 +189,22 @@ function csv(rows) {
     )
     .join("\n");
 }
-let inputDraft = {};
-function gaussianDialog() {
-  if (!calc?.frames.length) throw Error(ui("먼저 구조를 여세요.", "Open a structure first."));
-  const calculation = calc, inputFrame = frame;
-  const p = $("modalBody");
-  p.replaceChildren(node("h2", "Gaussian 16 · " + t("Gaussian 입력 생성")));
-  const nav = node("div", undefined, "dialog-tabs");
-  p.append(nav);
+const inputDrafts = new Map(), buildDrafts = new Map();
+let saveInputDraft = null;
+function renderGaussianInput(parent) {
+  if (!calc?.frames.length) return;
+  const calculation = calc;
+  const p = node("section", undefined, "gaussian-form");
+  parent.append(p);
+  p.id = "gaussianForm";
+  p.append(node("h2", "Gaussian 16 · " + t("Gaussian 입력 생성")));
   const pages = [node("div"), node("div"), node("div")];
-  pages.forEach((page) => p.append(page));
-  const tabButtons = [];
-  function showPage(index) {
-    pages.forEach((page, i) => { page.hidden = i !== index; });
-    tabButtons.forEach((b, i) => b.classList.toggle("active", i === index));
-  }
-  ["간편 설정", "커스텀 설정", "입력 미리보기"].forEach((label, i) => tabButtons.push(button(nav, label, () => showPage(i))));
-  const values = { method:"B3LYP", basis:"def2SVP", job:"Opt Freq", memory:"4GB", cores:4, checkpoint:"gausslook.chk", scf:"XQC", grid:"UltraFine", dispersion:"None", solvent:"None", extra:"", route:"#p B3LYP/def2SVP Opt Freq", additional:"", override:false, ...inputDraft, charge:calculation.charge ?? 0, multiplicity:calculation.multiplicity ?? 1, title:calculation.name };
+  pages.forEach((page, i) => {
+    p.append(page);
+    page.className = ["input-quick", "input-custom", "input-preview"][i];
+    page.append(node("h3", ["간편 설정", "커스텀 설정", "입력 미리보기"][i]));
+  });
+  const values = { method:"B3LYP", basis:"def2SVP", job:"Opt Freq", memory:"4GB", cores:4, checkpoint:"gausslook.chk", scf:"XQC", grid:"UltraFine", dispersion:"None", solvent:"None", extra:"", route:"#p B3LYP/def2SVP Opt Freq", additional:"", override:false, charge:calculation.charge ?? 0, multiplicity:calculation.multiplicity ?? 1, title:calculation.name, ...inputDrafts.get(calculation.id) };
   const controls = {}, grid = node("div", undefined, "form-grid");
   pages[0].append(grid);
   const choices = {
@@ -224,8 +223,7 @@ function gaussianDialog() {
   controls.cores.min = 1; controls.cores.max = 4096;
   controls.multiplicity.min = 1;
   [controls.charge, controls.multiplicity, controls.cores].forEach((control) => { control.step = 1; });
-  note(pages[0], "방법과 기저함수를 함께 설정합니다. 현재 선택한 frame의 Cartesian 좌표를 사용합니다.");
-  note(pages[0], `Frame ${inputFrame + 1} / ${calculation.frames.length}`);
+  note(pages[0], ui("타임라인에서 선택한 frame으로 생성합니다.", "Input uses the frame selected in the timeline."));
   controls.extra = field(pages[1], "추가 route 키워드", values.extra);
   controls.override = field(pages[1], "route 직접 입력", "", "checkbox");
   controls.override.checked = values.override;
@@ -241,13 +239,23 @@ function gaussianDialog() {
   const preview = node("textarea", undefined, "gaussian-preview");
   preview.id = "inputPreview";
   preview.readOnly = true;
+  preview.value = values.preview || "";
   preview.setAttribute("aria-label", t("입력 미리보기"));
   pages[2].append(preview);
   note(pages[2], "총전하와 다중도 및 Gen/ECP 블록을 확인하세요. Gaussian 실행이나 스케줄러 제출은 하지 않습니다.");
   const error = node("p", "", "note error");
   error.id = "inputError"; error.setAttribute("role", "alert"); p.append(error);
+  function remember() {
+    const v = Object.fromEntries(Object.entries(controls).map(([key, control]) => [key, control.type === "checkbox" ? control.checked : control.value]));
+    inputDrafts.set(calculation.id, {...v, preview: preview.value});
+    return v;
+  }
+  saveInputDraft = remember;
+  Object.values(controls).forEach(control => control.addEventListener("input", remember));
+  Object.values(controls).forEach(control => control.addEventListener("change", remember));
   function gather() {
-    const v = Object.fromEntries(Object.entries(controls).map(([key, control]) => [key, control.type === "checkbox" ? control.checked : control.value.trim()]));
+    const v = remember();
+    Object.keys(v).forEach(key => { if (typeof v[key] === "string") v[key] = v[key].trim(); });
     for (const key of ["charge","multiplicity","cores"]) {
       if (v[key] === "" || !Number.isInteger(Number(v[key]))) throw Error(ui("전하·다중도·CPU는 정수로 입력하세요.", "Charge, multiplicity and CPU cores must be integers."));
       v[key] = Number(v[key]);
@@ -259,23 +267,20 @@ function gaussianDialog() {
     if (v.solvent !== "None") parts.push(`SCRF=(SMD,Solvent=${v.solvent})`);
     parts.push(v.extra);
     const route = v.override ? v.route : parts.filter(Boolean).join(" ");
-    inputDraft = v;
-    return { route, charge:v.charge, multiplicity:v.multiplicity, cores:v.cores, memory:v.memory, checkpoint:v.checkpoint, title:v.title, additional:v.additional, frame:inputFrame };
+    return { route, charge:v.charge, multiplicity:v.multiplicity, cores:v.cores, memory:v.memory, checkpoint:v.checkpoint, title:v.title, additional:v.additional, frame };
   }
   async function generate() {
     error.textContent = "";
     try {
       const result = await api("/api/action", {action:"input", id:calculation.id, ...gather()});
       preview.value = result.text;
-      showPage(2);
+      remember();
       return result.text;
     } catch (e) { error.textContent = t(e.message); throw e; }
   }
   const actions = node("div", undefined, "dialog-actions"); p.append(actions);
   button(actions, "입력 생성 / 갱신", generate).id = "generateInput";
   button(actions, ".gjf 다운로드", async () => download("gausslook.gjf", await generate())).id = "downloadInput";
-  showPage(0);
-  if (!$("modal").open) $("modal").showModal();
 }
 async function refresh() {
   state = await api("/api/state");
@@ -301,6 +306,7 @@ async function load(id) {
   frame = Math.max(0, calc.frames.length - 1);
   modeIndex = null;
   activeMO = null;
+  activePolar = null;
   clearShapes();
   selected = [];
   meshes = [];
@@ -327,7 +333,7 @@ async function result(d) {
     clearShapes();
     draw(false, d.reference_coords);
     d.meshes.forEach(addMesh);
-    viewer.render();
+    requestViewerRender();
     status(`MO ${d.orbital} / ${d.spin} · ` + ui("±위상 표면 (파랑 + / 분홍 −)", "± phase surfaces (blue + / pink −)"));
     return d;
   }
@@ -369,6 +375,11 @@ const elements =
   "X H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni Cu Zn Ga Ge As Se Br Kr Rb Sr Y Zr Nb Mo Tc Ru Rh Pd Ag Cd In Sn Sb Te I Xe Cs Ba La Ce Pr Nd Pm Sm Eu Gd Tb Dy Ho Er Tm Yb Lu Hf Ta W Re Os Ir Pt Au Hg Tl Pb Bi Po At Rn Fr Ra Ac Th Pa U Np Pu Am Cm Bk Cf Es Fm Md No Lr Rf Db Sg Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og".split(
     " ",
   );
+let renderRequest = null;
+function requestViewerRender() {
+  if (!viewer || renderRequest !== null) return;
+  renderRequest = requestAnimationFrame(() => { renderRequest = null; viewer.render(); });
+}
 function draw(reset = false, coords = null) {
   if (!viewer || !calc?.frames.length) return;
   const key = calc.id + ":" + frame;
@@ -377,20 +388,31 @@ function draw(reset = false, coords = null) {
     renderedFrameKey = key;
   }
   const cam = reset ? null : viewer.getView();
-  viewer.removeAllModels();
-  viewer.removeAllLabels();
-  model = viewer.addModel(xyz(coords || calc.frames[frame].coords), "xyz");
-  applyStyle();
-  model.setClickable({}, true, (a) => {
-    const i = a.index;
-    if (selected.includes(i)) selected = selected.filter((v) => v !== i);
-    else selected.push(i);
+  if (model && !reset && key === model.frameKey && coords && model.setCoordinates) {
+    // Mode displacements keep topology; reuse bonds instead of reparsing XYZ.
+    model.setCoordinates(coords, "array");
+    model.setFrame(0);
+    if (settings.labels) applyStyle();
+  } else if (!model || reset || key !== model.frameKey || coords) {
+    viewer.removeAllModels();
+    model = viewer.addModel(xyz(coords || calc.frames[frame].coords), "xyz");
+    model.frameKey = key;
+    model.setClickable({}, true, (a) => {
+      const i = a.index;
+      if (selected.includes(i)) selected = selected.filter((v) => v !== i);
+      else selected.push(i);
+      applyStyle();
+      showSelection();
+    });
     applyStyle();
-    showSelection();
-  });
+  } else {
+    model.setCoordinates?.(calc.frames[frame].coords, "array");
+    model.setFrame?.(0);
+    if (settings.labels) applyStyle();
+  }
   if (reset) fitView();
   else viewer.setView(cam);
-  viewer.render();
+  requestViewerRender();
   $("frameLabel").textContent = `${frame + 1} / ${calc.frames.length}`;
   if (!coords) updateForcePanel().catch((e) => status(e.message, true));
 }
@@ -400,7 +422,7 @@ function fitView() {
   const coords = calc?.frames[frame]?.coords || [];
   const span = coords.length ? Math.max(...[0,1,2].map(axis => Math.max(...coords.map(p=>p[axis])) - Math.min(...coords.map(p=>p[axis])))) : 0;
   if (coords.length && span < 5) viewer.zoom?.(1.8);
-  viewer.render();
+  requestViewerRender();
 }
 function applyStyle() {
   if (!model) return;
@@ -437,7 +459,7 @@ function applyStyle() {
         borderThickness: 0,
       }) : null,
     );
-  viewer.render();
+  requestViewerRender();
 }
 async function showSelection() {
   $("selection").textContent = selected.map((i) => i + 1).join(", ");
@@ -479,6 +501,9 @@ function animateMode(index, amp = modeAmplitude) {
 }
 function renderPanel() {
   const panel = $("panel");
+  saveInputDraft?.();
+  saveInputDraft = null;
+  document.querySelector("main").classList.toggle("input-workspace", tab === "구조·입력");
   panel.replaceChildren();
   $("tabs").replaceChildren();
   tabs.forEach((t) => {
@@ -645,19 +670,25 @@ function renderPanel() {
     );
   }
   if (tab === "구조·입력") {
-    const smiles = field(panel, "SMILES", "c1ccccc1");
+    renderGaussianInput(panel);
+    const draft = buildDrafts.get(calc.id) || {smiles:"c1ccccc1", vector:"0,0,1"};
+    buildDrafts.set(calc.id, draft);
+    const smiles = field(panel, "SMILES", draft.smiles);
+    smiles.id = "buildSmiles";
+    smiles.oninput = () => { draft.smiles = smiles.value; };
     button(panel, "3D conformer 생성", async () =>
       result(await action("smiles", { smiles: smiles.value })),
     );
     note(panel, "RDKit 필요. 힘장 구조 생성 후 Gaussian 최적화를 수행하세요.");
-    button(panel, "Gaussian 입력 생성", gaussianDialog);
     button(panel, "선택 원자 삭제 → 새 구조", async () => {
       if (!selected.length) throw Error("원자를 먼저 선택하세요.");
       await result(
         await action("edit", { operation: "delete", indices: selected, frame }),
       );
     });
-    const vector = field(panel, "선택 원자 이동 dx,dy,dz (Å)", "0,0,1");
+    const vector = field(panel, "선택 원자 이동 dx,dy,dz (Å)", draft.vector);
+    vector.id = "buildVector";
+    vector.oninput = () => { draft.vector = vector.value; };
     button(panel, "선택 원자 이동 → 새 구조", async () =>
       result(
         await action("edit", {
@@ -988,6 +1019,7 @@ $("browseBtn").onclick = () => browse("").catch((e) => status(e.message, true));
 async function browse(path) {
   const d = await api("/api/browse?path=" + encodeURIComponent(path));
   const root = $("modalBody");
+  root.className = "";
   root.replaceChildren(node("h2", "서버 폴더"));
   const row = node("div", undefined, "path-row");
   root.append(row);
@@ -1002,10 +1034,10 @@ async function browse(path) {
   const parent = Object.prototype.hasOwnProperty.call(d, "parent") ? d.parent : d.path && d.path !== "." ? d.path.replace(/\\/g, "/").split("/").slice(0,-1).join("/") : null;
   if (parent !== null) button(root, "상위 폴더", () => browse(parent));
   const entries = parent !== null ? [{ name: "..", directory: true, path: parent }, ...d.entries] : d.entries;
-  table(
+  const listing = table(
     root,
-    ["이름", "종류"],
-    entries.map((v) => [v.name, v.directory ? t("폴더") : v.size + " bytes"]),
+    ["이름", "종류", "크기"],
+    entries.map((v) => [v.name, v.directory ? "▸ " + t("폴더") : (v.name.match(/\.([^.]+)$/)?.[1] || t("파일")).toUpperCase(), v.directory ? "—" : v.size + " bytes"]),
     async (i) => {
       const v = entries[i];
       try {
@@ -1019,6 +1051,12 @@ async function browse(path) {
       }
     },
   );
+  listing.classList.add("file-browser");
+  [...listing.querySelectorAll("tbody tr")].forEach((row, i) => {
+    row.classList.add(entries[i].directory ? "file-folder" : "file-" + (entries[i].name.match(/\.([^.]+)$/)?.[1] || "other").toLowerCase().replace(/[^a-z0-9_-]/g, "_"));
+    row.tabIndex = 0;
+    row.onkeydown = event => { if (event.key === "Enter") row.click(); };
+  });
   if (!$("modal").open) $("modal").showModal();
 }
 function saveSettings() {
@@ -1032,7 +1070,7 @@ function applyAppearance() {
   root.style.fontSize = Math.max(10, Math.min(24, Number(settings.fontSize) || 14)) + "px";
   root.style.setProperty("--viewer", settings.background);
   viewer?.setBackgroundColor(settings.background);
-  viewer?.render();
+  requestViewerRender();
   $("language").value = settings.language;
   $("themeBtn").textContent = t(settings.theme === "dark" ? "☀ 라이트 모드" : "☾ 다크 모드");
   $("themeBtn").title = ui("다크 / 라이트 화면을 전환하고 저장합니다.", "Switch and save the dark / light theme.");
@@ -1068,11 +1106,13 @@ function applyLanguage() {
 function settingsDialog() {
   const p = $("modalBody");
   p.replaceChildren(node("h2", "표시 설정"));
+  p.className = "display-settings";
   const appearance = node("div", undefined, "form-grid");
   p.append(appearance);
   const language = select(appearance, "언어", [["ko", "한국어"], ["en", "English"]], settings.language),
     theme = select(appearance, "테마", [["dark", "다크"], ["light", "라이트"]], settings.theme),
     font = select(appearance, "폰트", [
+      ['"Malgun Gothic","Noto Sans CJK KR",Arial,sans-serif', "한국어 / 시스템 글꼴"],
       ['Arial,"Malgun Gothic",sans-serif', "Arial / 맑은 고딕"],
       ['Calibri,"Gulim",sans-serif', "Calibri / 굴림"],
       ['"Noto Sans CJK KR",sans-serif', "Noto Sans KR"],
@@ -1133,6 +1173,28 @@ $("themeBtn").onclick = () => {
   settings.labelColor = settings.theme === "light" ? "#203146" : "#f1f5fa";
   saveSettings(); applyAppearance(); renderPanel();
 };
+let wheelRequest = null, latestWheel = null;
+function wheelAge(event) {
+  const stamp = event.timeStamp > 1e12 ? event.timeStamp - performance.timeOrigin : event.timeStamp;
+  return performance.now() - stamp;
+}
+document.addEventListener("wheel", event => {
+  if (wheelAge(event) > 120) { event.preventDefault(); event.stopImmediatePropagation(); }
+}, {capture:true, passive:false});
+$("viewer").addEventListener("wheel", event => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  latestWheel = {delta:event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 300 : 1), time:performance.now()};
+  if (wheelRequest !== null) return;
+  wheelRequest = requestAnimationFrame(() => {
+    wheelRequest = null;
+    const wheel = latestWheel;
+    latestWheel = null;
+    if (!viewer || performance.now() - wheel.time > 120) return;
+    viewer.zoom(Math.exp(-Math.max(-120, Math.min(120, wheel.delta)) / 600), 0);
+    requestViewerRender();
+  });
+}, {capture:true, passive:false});
 try {
   viewer = $3Dmol.createViewer("viewer", {
     backgroundColor: settings.background,
@@ -1140,7 +1202,7 @@ try {
   });
   new ResizeObserver(() => {
     viewer.resize();
-    viewer.render();
+    requestViewerRender();
     plot();
   }).observe($("viewer"));
 } catch (e) {

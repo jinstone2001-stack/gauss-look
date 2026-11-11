@@ -1,6 +1,6 @@
 # 공통 분석 API
 
-1.2의 주요 UI는 아래 기능을 직접 제공합니다. 같은 수치를 API에서도 사용할 수 있습니다.
+1.3의 주요 UI는 아래 기능을 직접 제공합니다. 같은 수치를 API에서도 사용할 수 있습니다.
 
 `GET /api/browse?path=...`는 상대 경로 또는 `--root` 안의 절대 경로를 받습니다. 응답의 `path`는 상대 경로, `absolute_path`는 현재 경로, `root`는 허용 범위, `parent`는 상대 상위 경로이며 루트에서는 `null`입니다. `truncated=true`는 첫 1000개 항목만 반환했음을 뜻합니다. 파일·없는 폴더·루트 밖 경로는 거부합니다.
 
@@ -26,7 +26,7 @@ spin별 MO 번호(1부터), 에너지·점유·HOMO/LUMO·gap을 반환합니다
 {"action":"orbital_surface","spin":"alpha","orbital":25,"grid":"coarse","level":0.03}
 ```
 
-task 완료 시 `meshes`의 ±위상 표면을 반환합니다. 원래 계산 선택을 유지하며 cube는 소스 파일·수정 시각·MO·spin·격자가 같은 경우 재사용합니다. 실제로 연 chk/fchk의 MO 계수와 cubegen이 필요합니다. 프로젝트에 기록된 임의 경로를 실행 근거로 사용하지 않습니다.
+task 완료 시 `meshes`의 ±위상 표면을 반환합니다. 원래 계산 선택을 유지하며 cube는 소스 파일·수정 시각·MO·spin·격자가 같은 경우 재사용합니다. 같은 field·등치값·channel·face 한도의 표면은 최근 8개까지 재사용합니다. field 연산은 새 field ID를 생성합니다. 실제로 연 chk/fchk의 MO 계수와 cubegen이 필요합니다. 프로젝트에 기록된 임의 경로를 실행 근거로 사용하지 않습니다.
 
 ```json
 {"action":"link_checkpoint","checkpoint_id":"열린_checkpoint_ID"}

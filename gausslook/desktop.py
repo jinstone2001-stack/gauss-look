@@ -1,7 +1,7 @@
 """Native X11 frontend. CPU canvas avoids forwarding a remote OpenGL context."""
 
 from __future__ import annotations
-import json, math, traceback
+import json, math, traceback, sys, time
 from pathlib import Path
 import numpy as np
 import tkinter as tk
@@ -24,6 +24,15 @@ class MoleculeCanvas(tk.Canvas):
         self.angle = [-0.2, 0.2]
         self.zoom = 1.0
         self.screen = []
+        self.screen_radii = []
+        self.bond_pairs = []
+        self._bond_coords = np.zeros((0, 3))
+        self._bond_atoms = ()
+        self._render_job = None
+        self._pending_zoom = None
+        self._wheel_clock = None
+        self._shade_cache = {}
+        self._mesh_cache = {}
         self.mesh = None
         self.vectors = None
         self.labels = False
@@ -34,14 +43,15 @@ class MoleculeCanvas(tk.Canvas):
         self.element_colors = {}
         self.selection_color = "#09bfd6"
         self.label_color = "#e0eaf5"
+        self.vector_color = "#ffd078"
         self.empty_text = "GaussLook / Open files or Demo"
-        self.bind("<Configure>", lambda e: self.render())
+        self.bind("<Configure>", lambda e: self.request_render())
         self.bind("<ButtonPress-1>", self.press)
         self.bind("<B1-Motion>", self.move)
         self.bind("<ButtonRelease-1>", self.release)
-        self.bind("<MouseWheel>", lambda e: self.wheel(1.12 if e.delta > 0 else 1 / 1.12))
-        self.bind("<Button-4>", lambda e: self.wheel(1.12))
-        self.bind("<Button-5>", lambda e: self.wheel(1 / 1.12))
+        self.bind("<MouseWheel>", lambda e: self.wheel(1.12 if e.delta > 0 else 1 / 1.12, e))
+        self.bind("<Button-4>", lambda e: self.wheel(1.12, e))
+        self.bind("<Button-5>", lambda e: self.wheel(1 / 1.12, e))
 
     def press(self, e):
         self.last = (e.x, e.y)
@@ -54,57 +64,98 @@ class MoleculeCanvas(tk.Canvas):
         self.angle[0] += dx * 0.012
         self.angle[1] += dy * 0.012
         self.last = (e.x, e.y)
-        self.render()
+        self.request_render()
 
     def release(self, e):
         if self.dragged:
             return
         candidates = [
-            (float(np.linalg.norm(np.array([e.x, e.y]) - s[:2])), i)
+            (s[2], i)
             for i, s in enumerate(self.screen)
-            if self.show_h or self.atoms[i] != 1
+            if (self.show_h or self.atoms[i] != 1)
+            and math.hypot(e.x - s[0], e.y - s[1]) <= max(7, self.screen_radii[i])
         ]
         if candidates:
-            d, i = min(candidates)
-            if d < 22:
-                if i in self.selected:
-                    self.selected.remove(i)
-                else:
-                    self.selected.append(i)
-                self.render()
-                self.callback(self.selected)
+            _, i = max(candidates)
+            if i in self.selected:
+                self.selected.remove(i)
+            else:
+                self.selected.append(i)
+            self.render()
+            self.callback(self.selected)
 
-    def wheel(self, factor):
-        self.zoom = max(0.08, min(15, self.zoom * factor))
-        self.render()
+    def wheel(self, factor, event=None):
+        stamp = int(getattr(event, "time", 0)) & 0xffffffff
+        if stamp:
+            now = time.monotonic()
+            if sys.platform == "win32":
+                import ctypes
+                age = (ctypes.windll.kernel32.GetTickCount() - stamp) & 0xffffffff
+            else:
+                if self._wheel_clock is None:
+                    self._wheel_clock = stamp, now
+                origin, received = self._wheel_clock
+                elapsed = (stamp - origin) & 0xffffffff
+                if elapsed >= 0x80000000:
+                    return "break"
+                age = (now - received) * 1000 - elapsed
+                if age < 0:
+                    self._wheel_clock = stamp, now
+            if 150 < age < 0x80000000:
+                return "break"
+        # Use the latest wheel direction once per redraw; discard stale bursts.
+        self._pending_zoom = factor
+        self.request_render()
+        return "break"
 
-    def set_structure(self, atoms, coords, reset=False):
-        self.atoms = atoms
+    def request_render(self):
+        # Keep one pending redraw so queued mouse events update the latest view.
+        if self._render_job is None:
+            self._render_job = self.after(16, self.render)
+
+    def set_structure(self, atoms, coords, reset=False, bond_coords=None):
+        reference = np.asarray(coords if bond_coords is None else bond_coords, float)
+        if tuple(atoms) != self._bond_atoms or not np.array_equal(reference, self._bond_coords):
+            self.bond_pairs = bonds(atoms, reference)
+            self._bond_coords = reference.copy()
+            self._bond_atoms = tuple(atoms)
+        self.atoms = list(atoms)
         self.coords = np.asarray(coords, float)
+        self._center = self.coords.mean(0) if len(self.coords) else np.zeros(3)
+        self._span = max(2.5, float(np.linalg.norm(np.ptp(self.coords, axis=0)))) if len(self.coords) else 2.5
         if reset:
             self.zoom = 1.0
+            self._pending_zoom = None
             self.selected = []
             self.mesh = None
             self.vectors = None
         self.render()
 
     def render(self):
+        if self._render_job is not None:
+            self.after_cancel(self._render_job)
+            self._render_job = None
+        if self._pending_zoom is not None:
+            self.zoom = max(0.08, min(15, self.zoom * self._pending_zoom))
+            self._pending_zoom = None
         self.delete("all")
         if not len(self.coords):
+            self.screen = []
+            self.screen_radii = []
             self.create_text(
                 max(100, self.winfo_width() / 2),
                 max(80, self.winfo_height() / 2),
                 text=self.empty_text,
-                fill="#94a9c0",
-                font=("Arial", 13),
+                fill=self.label_color,
+                font="TkDefaultFont",
             )
             return
         x, y = self.angle
         ry = np.array([[np.cos(x), 0, np.sin(x)], [0, 1, 0], [-np.sin(x), 0, np.cos(x)]])
         rx = np.array([[1, 0, 0], [0, np.cos(y), -np.sin(y)], [0, np.sin(y), np.cos(y)]])
         rot = ry @ rx
-        center = self.coords.mean(0)
-        span = max(2.5, float(np.linalg.norm(np.ptp(self.coords, axis=0))))
+        center = self._center
+        span = self._span
         scale = min(self.winfo_width(), self.winfo_height()) * 0.7 / span * self.zoom
 
         def project(v):
@@ -120,15 +171,15 @@ class MoleculeCanvas(tk.Canvas):
         p = project(self.coords)
         self.screen = p
         mesh_list = self.mesh if isinstance(self.mesh, list) else [self.mesh] if self.mesh else []
+        self._mesh_cache = {id(mesh): self._mesh_cache[id(mesh)] for mesh in mesh_list if id(mesh) in self._mesh_cache}
         for mesh in mesh_list:
-            verts = project(np.asarray(mesh["vertices"]))
-            faces = mesh["faces"]
-            step = max(1, len(faces) // 2200)
-            draw = []
-            for f in faces[::step]:
-                points = verts[f]
-                draw.append((float(points[:, 2].mean()), points))
-            for depth, points in sorted(draw, key=lambda v: v[0]):
+            if id(mesh) not in self._mesh_cache:
+                faces = np.asarray(mesh["faces"], dtype=int).reshape(-1, 3)
+                self._mesh_cache[id(mesh)] = (np.asarray(mesh["vertices"], float), faces[::max(1, math.ceil(len(faces) / 2200))])
+            vertices, faces = self._mesh_cache[id(mesh)]
+            triangles = project(vertices)[faces]
+            for index in np.argsort(triangles[:, :, 2].mean(axis=1)):
+                points = triangles[index]
                 self.create_polygon(
                     points[:, :2].reshape(-1).tolist(),
                     fill="#366e92" if mesh["level"] > 0 else "#9c526b",
@@ -142,22 +193,26 @@ class MoleculeCanvas(tk.Canvas):
             return self.element_colors.get(str(z), COLORS.get(z, "#b1a3c7"))
 
         def shade(color, factor):
-            rgb = self.winfo_rgb(color)
-            return "#" + "".join(f"{max(0, min(255, int(v / 257 * factor))):02x}" for v in rgb)
+            key = color, factor
+            if key not in self._shade_cache:
+                rgb = tuple(int(color[i:i+2], 16) for i in (1, 3, 5))
+                self._shade_cache[key] = "#" + "".join(f"{max(0, min(255, int(v * factor))):02x}" for v in rgb)
+            return self._shade_cache[key]
 
         primitives = []
         if self.style != "sphere":
-            for i, j in bonds(self.atoms, self.coords):
+            for i, j in self.bond_pairs:
                 if not self.show_h and (self.atoms[i] == 1 or self.atoms[j] == 1):
                     continue
-                for segment in range(12):
-                    a = p[i] + (p[j] - p[i]) * segment / 12
-                    b = p[i] + (p[j] - p[i]) * (segment + 1) / 12
-                    primitives.append(((a[2] + b[2]) / 2, "bond", (a, b, atom_color(i if segment < 6 else j))))
+                for segment in range(6):
+                    a = p[i] + (p[j] - p[i]) * segment / 6
+                    b = p[i] + (p[j] - p[i]) * (segment + 1) / 6
+                    primitives.append(((a[2] + b[2]) / 2, "bond", (a, b, atom_color(i if segment < 3 else j))))
         for i in range(len(self.atoms)):
             if self.show_h or self.atoms[i] != 1:
                 primitives.append((p[i, 2], "atom", i))
         bond_width = (1.2 if self.style == "line" else max(2.5, min(16, scale * .12))) * self.bond_scale
+        self.screen_radii = [0] * len(self.atoms)
         for depth, kind, item in sorted(primitives, key=lambda item: item[0]):
             if kind == "bond":
                 a, b, color = item
@@ -170,6 +225,7 @@ class MoleculeCanvas(tk.Canvas):
             r = 2 if self.style == "line" else max(3, min(52, radius * scale * self.atom_scale))
             if self.style == "sphere":
                 r *= 2.2
+            self.screen_radii[i] = r
             color = atom_color(i)
             cx, cy = p[i, :2]
             self.create_oval(cx-r, cy-r, cx+r, cy+r, fill=shade(color, .48), outline=shade(color, .36))
@@ -191,7 +247,7 @@ class MoleculeCanvas(tk.Canvas):
             if maximum > 0:
                 ends = project(self.coords + vectors / maximum * 0.9)
                 for a, b in zip(p, ends):
-                    self.create_line(*a[:2], *b[:2], fill="#ffd078", width=2, arrow="last")
+                    self.create_line(*a[:2], *b[:2], fill=self.vector_color, width=2, arrow="last")
 
 
 class PlotCanvas(tk.Canvas):
@@ -250,7 +306,7 @@ class App(NativeAppearance, CorePanels):
         self.engine = engine
         self.load_preferences()
         self.root = tk.Tk()
-        self.root.title("GaussLook 1.2 · Gaussian 16 Analysis Studio")
+        self.root.title("GaussLook 1.3 · Gaussian 16 Analysis Studio")
         self.root.geometry("1440x900")
         self.root.minsize(1050, 700)
         self.calc = None
@@ -264,18 +320,13 @@ class App(NativeAppearance, CorePanels):
         chosen = next(
             (
                 f
-                for f in ["Malgun Gothic", "Noto Sans CJK KR", "NanumGothic", "Gulim", "Arial"]
+                for f in ["Malgun Gothic", "맑은 고딕", "Noto Sans KR", "Noto Sans CJK KR", "NanumGothic", "Gulim", "굴림", "Arial"]
                 if f in families
             ),
             "Arial",
         )
-        self.cjk = any(
-            any(k in f.lower() for k in ["gothic", "cjk", "gulim", "nanum", "malgun"])
-            for f in families
-        )
-        self.has_cjk_font = self.cjk and any(
-            f in families for f in ["Malgun Gothic", "Noto Sans CJK KR", "NanumGothic", "Gulim"]
-        )
+        self.cjk_font = next((f for f in [chosen, *sorted(families)] if not f.startswith("@") and any(k in f.lower() for k in ["cjk kr", "gulim", "nanum", "malgun", "sans kr", "source han sans k", "고딕", "돋움", "굴림", "바탕", "batang", "dotum"])), None)
+        self.has_cjk_font = self.cjk_font is not None
         if not self.has_cjk_font and not self.preference_path.exists():
             self.language = self.preferences["language"] = "en"
         self.cjk = self.language == "ko"
@@ -298,7 +349,7 @@ class App(NativeAppearance, CorePanels):
             ("도움말", self.show_help),
         ]:
             ttk.Button(bar, text=label, command=self.safe(fn)).pack(side="left", padx=3)
-        ttk.Label(bar, text="GaussLook 1.2", font=(chosen, 17, "bold")).pack(side="right", padx=8)
+        ttk.Label(bar, text="GaussLook 1.3", font=(chosen, 17, "bold")).pack(side="right", padx=8)
         self.language_var = tk.StringVar(value="한국어" if self.cjk else "English")
         language = ttk.Combobox(bar, textvariable=self.language_var, values=["한국어", "English"], state="readonly", width=8)
         language.pack(side="right", padx=4)
@@ -445,28 +496,10 @@ class App(NativeAppearance, CorePanels):
                 lambda: self.accept(self.engine.action("smiles", smiles=self.smiles.get()))
             ),
         ).pack(fill="x", pady=4)
-        ttk.Label(f, text="Gaussian route").pack(anchor="w")
-        self.route = ttk.Entry(f)
-        self.route.insert(0, "#p B3LYP/def2SVP Opt Freq")
-        self.route.pack(fill="x")
-        r = ttk.Frame(f)
-        r.pack(fill="x", pady=5)
-        self.charge = ttk.Entry(r, width=5)
-        self.charge.insert(0, "0")
-        self.charge.pack(side="left")
-        self.mult = ttk.Entry(r, width=5)
-        self.mult.insert(0, "1")
-        self.mult.pack(side="left")
-        ttk.Label(r, text="전하 / 다중도").pack(side="left")
-        self.additional = tk.Text(f, height=8, width=48)
-        self.additional.pack(fill="both", expand=True)
-        ttk.Button(f, text="Gaussian 입력 저장", command=self.safe(self.export_input)).pack(
-            fill="x", pady=4
-        )
-        ttk.Button(f, text="Gaussian 입력 설정…", command=self.safe(lambda: gaussian_dialog(self))).pack(fill="x", pady=4)
         ttk.Button(f, text="선택 원자 삭제 → 새 구조", command=self.safe(self.delete_atoms)).pack(
             fill="x"
         )
+        gaussian_dialog(self, parent=f)
         f = self.panels["도구"]
         ttk.Label(f, text="공통 엔진 JSON 분석", font=("Arial", 12, "bold")).pack(anchor="w")
         self.request = tk.Text(f, height=10, width=48)
@@ -510,6 +543,10 @@ class App(NativeAppearance, CorePanels):
         self.charge.insert(0, str(self.calc.charge or 0))
         self.mult.delete(0, "end")
         self.mult.insert(0, str(self.calc.multiplicity or 1))
+        if getattr(self, "_input_calculation_id", None) != cid:
+            self.gaussian_ui["variables"]["title"].set(self.calc.name)
+            self.gaussian_ui["preview"].delete("1.0", "end")
+            self._input_calculation_id = cid
         self.status.configure(text=self.calc.name + " · " + self.calc.status["termination"])
         self.path_plot()
 
@@ -563,6 +600,7 @@ class App(NativeAppearance, CorePanels):
                 self.calc.atoms,
                 coords if coords is not None else self.calc.frames[self.frame]["coords"],
                 reset,
+                bond_coords=self.calc.frames[self.frame]["coords"],
             )
             self.frame_label.configure(text=f"{self.frame+1} / {len(self.calc.frames)}")
 
@@ -592,6 +630,7 @@ class App(NativeAppearance, CorePanels):
 
     def center(self):
         self.viewer.zoom = 1.0
+        self.viewer._pending_zoom = None
         self.viewer.render()
 
     def slider(self, value):
@@ -875,19 +914,7 @@ class App(NativeAppearance, CorePanels):
 
     def export_input(self):
         if self.calc:
-            draft = getattr(self, "input_options", {})
-            extra = {key: draft[key] for key in ("title", "memory", "cores", "checkpoint") if key in draft} if draft.get("_calculation_id") == self.calc.id else {}
-            d = self.engine.action(
-                "input",
-                self.calc.id,
-                route=self.route.get(),
-                charge=int(self.charge.get()),
-                multiplicity=int(self.mult.get()),
-                additional=self.additional.get("1.0", "end"),
-                frame=self.frame,
-                **extra,
-            )
-            self.save("Gaussian input", ".gjf", d["text"])
+            self.save("Gaussian input", ".gjf", self.gaussian_ui["generate"]())
 
     def delete_atoms(self):
         if not self.calc or not self.viewer.selected:

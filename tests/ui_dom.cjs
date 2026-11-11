@@ -20,7 +20,11 @@ const dom = new JSDOM(
   },
 );
 const w = dom.window;
-w.fetch = (url, opts) => fetch(new URL(url, base), opts);
+let lastInputFrame = null;
+w.fetch = (url, opts) => {
+  if (opts?.body) { const body = JSON.parse(opts.body); if (body.action === "input") lastInputFrame = body.frame; }
+  return fetch(new URL(url, base), opts);
+};
 w.ResizeObserver = class {
   observe() {}
   disconnect() {}
@@ -41,12 +45,13 @@ w.HTMLDialogElement.prototype.close = function () {
 };
 w.URL.createObjectURL = () => "blob:mock";
 w.URL.revokeObjectURL = () => {};
-let structures = 0,
+let structures = 0, coordinateUpdates = 0, renders = 0, zooms = [],
   surfaces = 0;
 const graphics = {
   getView: () => [],
   setView() {},
-  render() {},
+  render() { renders++; },
+  zoom(factor) { zooms.push(factor); },
   resize() {},
   zoomTo() {},
   removeAllModels() {},
@@ -68,7 +73,14 @@ const graphics = {
         const [elem, x, y, z] = line.split(/\s+/);
         return { elem, x: +x, y: +y, z: +z, index: i };
       });
-    return { setStyle() {}, setClickable() {}, selectedAtoms: () => atoms };
+    return {
+      setStyle() {}, setClickable() {}, selectedAtoms: () => atoms,
+      setCoordinates(coords) {
+        coordinateUpdates++;
+        coords.forEach((p, i) => { atoms[i].x=p[0]; atoms[i].y=p[1]; atoms[i].z=p[2]; });
+      },
+      setFrame() {},
+    };
   },
   addCustom(mesh) {
     assert(mesh.vertexArr.length > 0);
@@ -151,6 +163,13 @@ async function until(fn) {
   click("분극률");
   await wait(30);
   assert(w.document.getElementById("panel").textContent.includes("4.00000000"));
+  const polar = w.document.querySelector("#panel select");
+  polar.value = "1";
+  polar.dispatchEvent(new w.Event("change"));
+  w.document.getElementById("themeBtn").click();
+  assert.equal(w.document.querySelector("#panel select").value, "1");
+  assert(w.document.getElementById("panel").textContent.includes("8.00000000"));
+  w.document.getElementById("themeBtn").click();
   click("도움말");
   await wait(30);
   const search = w.document.querySelector("#panel input");
@@ -176,8 +195,11 @@ async function until(fn) {
   assert(
     w.document.querySelector(".modes tbody tr").classList.contains("imaginary"),
   );
+  const beforeAnimation = structures, beforeCoordinates = coordinateUpdates;
   w.document.querySelector(".modes tbody tr").click();
-  await wait(160);
+  await wait(230);
+  assert(coordinateUpdates > beforeCoordinates, "animation should update existing coordinates");
+  assert(structures <= beforeAnimation + 1, "animation should not rebuild the model each tick");
   click("정지");
   click("평형 구조");
   assert.equal(w.document.getElementById("frame").value, "0");
@@ -237,21 +259,58 @@ async function until(fn) {
   folderPath.dispatchEvent(new w.KeyboardEvent("keydown", {key:"Enter", bubbles:true}));
   await until(() => w.document.getElementById("browsePath") !== folderPath && w.document.getElementById("browsePath").value.endsWith("docs"));
   assert([...w.document.querySelectorAll("#modalBody tbody tr")].some(r => r.firstElementChild.textContent === ".."));
+  assert(w.document.querySelector(".file-browser .file-folder"));
+  assert(w.document.querySelector(".file-browser .file-md td:nth-child(2)").textContent === "MD");
   click("↑ Parent folder");
   await until(() => !w.document.getElementById("browsePath").value.endsWith("docs"));
   click("Close");
   click("Structure · Input");
   assert(w.document.getElementById("panel").textContent.includes("SMILES"));
-  click("Build Gaussian input");
+  assert(w.document.querySelector("#panel #gaussianForm"), "Gaussian form must be inline");
+  assert.equal(w.document.getElementById("modal").open, false);
+  assert(!w.document.getElementById("inputPreview").closest("[hidden]"));
+  const smiles = w.document.getElementById("buildSmiles");
+  smiles.value = "CCO"; smiles.dispatchEvent(new w.Event("input"));
+  w.document.getElementById("input_method").value = "PBE1PBE";
+  w.document.getElementById("input_title").value = "preserved draft";
+  w.document.getElementById("themeBtn").click();
+  assert.equal(w.document.getElementById("buildSmiles").value, "CCO");
+  assert.equal(w.document.getElementById("input_title").value, "preserved draft");
+  assert.equal(w.document.getElementById("input_method").value, "PBE1PBE");
+  language.value = "ko"; language.dispatchEvent(new w.Event("change"));
+  assert.equal(w.document.getElementById("buildSmiles").value, "CCO");
+  assert.equal(w.document.getElementById("input_title").value, "preserved draft");
+  language.value = "en"; language.dispatchEvent(new w.Event("change"));
+  w.document.getElementById("input_method").value = "B3LYP";
   w.document.getElementById("input_title").value = "UI selected frame";
   w.document.getElementById("input_memory").value = "8GB";
   w.document.getElementById("input_cores").value = "8";
+  slider.value = "1"; slider.dispatchEvent(new w.Event("input"));
   w.document.getElementById("generateInput").click();
   await until(() => w.document.getElementById("inputPreview").value.includes("UI selected frame"));
+  assert.equal(lastInputFrame, 1, "inline generation must use the current timeline frame");
   const inputText = w.document.getElementById("inputPreview").value;
   assert(inputText.startsWith("%mem=8GB\n%nprocshared=8\n%chk=gausslook.chk\n#p B3LYP/def2SVP Opt Freq"));
-  click("Close");
+  const structuresBeforeStyle = structures;
+  w.document.getElementById("themeBtn").click();
+  assert.equal(structures, structuresBeforeStyle, "appearance should reuse the existing model");
+  // One frame uses the latest wheel event, rather than replaying its full queue.
+  zooms = [];
+  const viewerElement = w.document.getElementById("viewer");
+  for (let i=0; i<30; i++) viewerElement.dispatchEvent(new w.WheelEvent("wheel", {deltaY:120, bubbles:true, cancelable:true}));
+  viewerElement.dispatchEvent(new w.WheelEvent("wheel", {deltaY:-120, bubbles:true, cancelable:true}));
+  await wait(40);
+  assert.equal(zooms.length, 1);
+  assert(zooms[0] > 1, "only the latest wheel direction should be used");
+  const staleWheel = new w.WheelEvent("wheel", {deltaY:120, bubbles:true, cancelable:true});
+  Object.defineProperty(staleWheel, "timeStamp", {value: w.performance.now() - 500});
+  viewerElement.dispatchEvent(staleWheel);
+  await wait(40);
+  assert.equal(zooms.length, 1, "stale wheel input must be discarded");
   click("Help");
+  const appearanceHelp = w.document.querySelector("#panel input");
+  appearanceHelp.value = "Language, theme";
+  appearanceHelp.dispatchEvent(new w.Event("input"));
   assert(w.document.querySelector(".help-content").textContent.includes("Language, theme"));
   language.value = "ko";
   language.dispatchEvent(new w.Event("change"));
@@ -262,6 +321,8 @@ async function until(fn) {
     JSON.stringify({
       dom: "passed",
       structures,
+      coordinateUpdates,
+      renders,
       surfaces,
       features: 140,
       errors,

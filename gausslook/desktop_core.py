@@ -293,6 +293,8 @@ class CorePanels:
         if not self.calc:
             return
         channels = orbital_analysis(self.calc)["channels"]
+        previous_mo = self.mo.get() if getattr(self, "_mo_calculation_id", None) == self.calc.id else ""
+        self._mo_calculation_id = self.calc.id
         sp = self.spin.get()
         self.spin["values"] = list(channels) or ["alpha"]
         if sp not in channels:
@@ -345,7 +347,11 @@ class CorePanels:
         self.checkpoint_combo["values"] = [self.engine.get(cid).name for cid in self.checkpoint_ids]
         if self.checkpoint_ids:
             self.checkpoint_combo.current(0)
-        if o.get("homo"):
+        if previous_mo in self.mo_table.get_children():
+            self.mo_table.selection_set(previous_mo)
+            self.mo.delete(0, "end")
+            self.mo.insert(0, previous_mo)
+        elif o.get("homo"):
             self.select_frontier("HOMO")
         self.draw_mo_graph()
 
@@ -393,11 +399,8 @@ class CorePanels:
         for k, row in enumerate(rows):
             y = 110 - (row["energy_eV"] - lo) / span * 90
             x = 55 + k * (width - 90) / max(1, len(rows))
-            color = (
-                "#57d1c9"
-                if row["mo"] == selected
-                else "#f29eb0" if not row["occupation"] else "#65bafa"
-            )
+            dark = self.preferences["theme"] == "dark"
+            color = ("#57d1c9" if dark else "#08756d") if row["mo"] == selected else (("#f29eb0" if dark else "#a22f58") if not row["occupation"] else ("#65bafa" if dark else "#23659e"))
             tag = "mo" + str(row["mo"])
             self.mo_graph.create_line(x, y, x + 35, y, fill=color, width=4, tags=tag)
             self.mo_graph.create_text(
@@ -405,15 +408,15 @@ class CorePanels:
                 y - 10,
                 text=f"{row['mo']} {row['label']}",
                 fill=color,
-                font=("Arial", 8),
+                font="TkDefaultFont",
                 tags=tag,
             )
             self.mo_graph.create_text(
                 x + 17,
                 y + 12,
                 text=f"{row['energy_eV']:.2f}",
-                fill="#c5d3e4",
-                font=("Arial", 8),
+                fill=getattr(self, "palette", {}).get("fg", "#c5d3e4"),
+                font="TkDefaultFont",
                 tags=tag,
             )
             self.mo_graph.tag_bind(
@@ -536,12 +539,17 @@ class CorePanels:
             )
 
     def fill_polar(self):
+        previous_index = self.polar_source.current() if getattr(self, "_polar_calculation_id", None) == self.calc.id else -1
+        previous_source = self.polar_source.get()
+        self._polar_calculation_id = self.calc.id
         data = polarizability_analysis(self.calc)
         self.polar_records = data["records"]
         self.polar_source["values"] = [
             f"{r['source']} / W={r.get('frequency_au','?')}" for r in self.polar_records
         ]
-        if data["default_index"] is not None:
+        if 0 <= previous_index < len(self.polar_records) and self.polar_source["values"][previous_index] == previous_source:
+            self.polar_source.current(previous_index)
+        elif data["default_index"] is not None:
             self.polar_source.current(data["default_index"])
         else:
             self.polar_source.set("")

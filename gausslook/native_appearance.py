@@ -125,12 +125,18 @@ class NativeAppearance:
             for widget in parent.winfo_children():
                 try:
                     value = widget.cget("text")
-                    pair = getattr(widget, "_language_pair", lookup.get(str(value)))
+                    previous = getattr(widget, "_language_pair", ())
+                    pair = previous if str(value) in previous else lookup.get(str(value))
                     if pair:
                         widget._language_pair = pair
                         widget.configure(text=pair[0 if self.cjk else 1])
                 except tk.TclError:
                     pass
+                if isinstance(widget, ttk.Notebook):
+                    for tab in widget.tabs():
+                        pair = lookup.get(widget.tab(tab, "text"))
+                        if pair:
+                            widget.tab(tab, text=pair[0 if self.cjk else 1])
                 translate(widget)
 
         translate(self.root)
@@ -143,6 +149,7 @@ class NativeAppearance:
             self.notebook.tab(self.panels[name], text=label)
         self.manual.set_language(not self.cjk)
         self.viewer.empty_text = self.words("GaussLook / 파일 열기 또는 데모", "GaussLook / Open files or Demo")
+        self.apply_appearance()
         self.viewer.render()
         self.plot.english = not self.cjk
         self.plot.render()
@@ -166,6 +173,8 @@ class NativeAppearance:
         p = self.palette
         colors = settings["text_colors"]
         family = settings["font_family"] or font.nametofont("TkDefaultFont").actual("family")
+        if self.cjk and (family.startswith("@") or not any(part in family.lower() for part in ("cjk kr", "gulim", "nanum", "malgun", "sans kr", "source han sans k", "고딕", "돋움", "굴림", "바탕", "batang", "dotum"))):
+            family = getattr(self, "cjk_font", None) or family
         size = int(settings["font_size"])
         for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
             font.nametofont(name).configure(family=family, size=size)
@@ -173,8 +182,12 @@ class NativeAppearance:
         style.configure(".", background=p["panel"], foreground=colors.get("body", p["fg"]), font="TkDefaultFont")
         for name in ("TFrame", "TLabelframe", "TNotebook", "TNotebook.Tab", "TPanedwindow"):
             style.configure(name, background=p["panel"])
-        style.configure("TButton", background=p["panel"], foreground=colors.get("button", p["fg"]), padding=(7, 4))
+        style.configure("TButton", background=p["panel"], foreground=colors.get("button", p["fg"]), padding=(7, 4), width=0)
         style.map("TButton", background=[("active", p["entry"])], foreground=[("disabled", p["muted"])])
+        style.map("TButton", foreground=[("disabled", p["muted"]), ("active", colors.get("button", p["fg"]))])
+        for name in ("TCheckbutton", "TRadiobutton"):
+            style.configure(name, background=p["panel"], foreground=p["fg"], indicatorcolor=p["entry"])
+            style.map(name, background=[("active", p["panel"])], foreground=[("disabled", p["muted"]), ("active", p["fg"])], indicatorcolor=[("selected", p["accent"]), ("!selected", p["entry"])])
         for name in ("TEntry", "TCombobox", "TSpinbox"):
             style.configure(name, fieldbackground=p["entry"], foreground=colors.get("input", p["fg"]), insertcolor=p["fg"])
             style.map(name, fieldbackground=[("readonly", p["entry"])], foreground=[("readonly", colors.get("input", p["fg"]))])
@@ -185,6 +198,7 @@ class NativeAppearance:
         self.root.configure(background=p["bg"])
         self.root.option_add("*TCombobox*Listbox.background", p["entry"])
         self.root.option_add("*TCombobox*Listbox.foreground", p["fg"])
+        self.root.option_add("*TCombobox*Listbox.font", "TkDefaultFont")
 
         def walk(widget):
             if isinstance(widget, tk.Text):
@@ -207,6 +221,7 @@ class NativeAppearance:
             self.viewer.element_colors = settings["element_colors"]
             self.viewer.selection_color = settings["selection"]
             self.viewer.label_color = colors.get("label", p["fg"])
+            self.viewer.vector_color = "#ffd078" if dark else "#8c4b00"
             self.viewer.render()
         if hasattr(self, "plot"):
             self.plot.foreground = p["muted"]
@@ -218,15 +233,16 @@ class NativeAppearance:
     def settings(self):
         win = tk.Toplevel(self.root)
         win.title(self.words("표시 설정", "Display settings"))
-        win.geometry("720x660")
+        win.geometry("620x550")
+        win.minsize(540, 480)
         before = copy.deepcopy(self.preferences)
-        outer = ttk.Frame(win, padding=12)
+        outer = ttk.Frame(win, padding=8)
         outer.pack(fill="both", expand=True)
         actions = ttk.Frame(outer)
-        actions.pack(side="bottom", fill="x", pady=10)
+        actions.pack(side="bottom", fill="x", pady=5)
         notebook = ttk.Notebook(outer)
         notebook.pack(fill="both", expand=True)
-        general, elements = ttk.Frame(notebook, padding=12), ttk.Frame(notebook, padding=12)
+        general, elements = ttk.Frame(notebook, padding=6), ttk.Frame(notebook, padding=6)
         notebook.add(general, text=self.words("글꼴 / 화면", "Font / display"))
         notebook.add(elements, text=self.words("원소별 색상", "Element colors"))
         variables = {key: tk.StringVar(value=str(self.preferences[key])) for key in ("font_family", "font_size", "theme", "atom_scale", "bond_scale")}
@@ -234,10 +250,10 @@ class NativeAppearance:
             variables["font_family"].set(font.nametofont("TkDefaultFont").actual("family"))
         entries = [("글꼴", "Font", "font_family", sorted(set(font.families(self.root)))), ("크기 pt", "Size pt", "font_size", list(range(8, 25))), ("모드", "Theme", "theme", ["dark", "light"]), ("원자 크기", "Atom scale", "atom_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"]), ("결합 굵기", "Bond scale", "bond_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"])]
         for row, (ko, en, key, values) in enumerate(entries):
-            ttk.Label(general, text=self.words(ko, en)).grid(row=row, column=0, sticky="w", pady=5, padx=5)
-            ttk.Combobox(general, textvariable=variables[key], values=values, width=37).grid(row=row, column=1, sticky="ew", pady=5)
+            ttk.Label(general, text=self.words(ko, en)).grid(row=row, column=0, sticky="w", pady=2, padx=3)
+            ttk.Combobox(general, textvariable=variables[key], values=values, width=30).grid(row=row, column=1, sticky="ew", pady=2)
         general.columnconfigure(1, weight=1)
-        ttk.Label(general, text=self.words("한글 글꼴은 X11 실행 서버에 설치되어 있어야 합니다.\n설정은 현재 작업 폴더의 .gausslook-ui.json에 저장됩니다.", "Korean fonts must be installed on the X11 server.\nPreferences are stored in .gausslook-ui.json in the working folder."), wraplength=590).grid(row=5, column=0, columnspan=2, sticky="w", pady=10)
+        ttk.Label(general, text=self.words("한글 글꼴은 X11 실행 서버에 설치되어 있어야 합니다.\n설정은 현재 작업 폴더의 .gausslook-ui.json에 저장됩니다.", "Korean fonts must be installed on the X11 server.\nPreferences are stored in .gausslook-ui.json in the working folder."), wraplength=540).grid(row=5, column=0, columnspan=2, sticky="w", pady=5)
 
         def choose_color(key):
             value = colorchooser.askcolor(parent=win, initialcolor=self.preferences["text_colors"].get(key, self.palette["fg"]))[1]
@@ -261,7 +277,7 @@ class NativeAppearance:
                 self.apply_appearance()
         ttk.Button(general, text=self.words("뷰어 배경색", "Viewer background"), command=background_color).grid(row=9, column=0, sticky="ew", padx=4, pady=4)
         ttk.Button(general, text=self.words("테마 기본색 복원", "Reset theme colors"), command=lambda: (self.preferences.update(background="", text_colors={}), self.apply_appearance())).grid(row=9, column=1, sticky="ew", padx=4)
-        tree = ttk.Treeview(elements, columns=("z", "element", "color"), show="headings", height=16)
+        tree = ttk.Treeview(elements, columns=("z", "element", "color"), show="headings", height=10)
         for key, label in [("z", "Z"), ("element", "Element"), ("color", "RGB")]:
             tree.heading(key, text=label)
             tree.column(key, width=150)

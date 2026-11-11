@@ -1,5 +1,29 @@
 # GaussLook 검증 기록
 
+## 1.3 검증 — 2026-11-11
+
+- 검증 대상은 `D:\Codex\05.gauss-look`입니다. 이전 ChatGPT 대화의 v1.3 요청(성능, Build/Input 인라인 Gaussian 설정, 스크롤 누적 해소, Light 대비, 파일 구분, 한글 표시, 설정 간격)을 기준으로 v1.2에서 이어서 구현했습니다. 원본 기획서와 LICENSE는 변경하지 않았습니다.
+- Windows / Python 3.12.14: **91 passed**(엔진/API 77개 + 실제 Tk UI 14개). cube의 단위·채널·orbital ID와 잘못된 숫자/개수 거부, checkpoint 변경 시 캐시 무효화, 표면 재사용·매핑 분리·캐시 상한, 한글 프로젝트 UTF-8, 최신/오래된 휠 입력·시각 wrap, 정적 결합 재사용, 표시 원자 반경 선택, 현재 frame의 인라인 Gaussian 입력과 저장, 언어 변경 시 MO·분극률 선택 유지 등을 포함합니다.
+- 실제 Tk 8.6 win32: 한국어/영어, Light와 한글 글꼴 fallback, 형식별 파일 표시, 작아진 설정창, 인라인 입력·현재 frame·고급 Route/추가 입력의 기존 왕복 시험이 통과했습니다. Linux CI에서도 새 Tk 시험을 Xvfb 대상으로 추가했습니다.
+- 실제 Python HTTP 서버 + jsdom/모의 renderer: **DOM passed / errors []**, structures=3, coordinateUpdates=5, renders=13, surfaces=3, features=140. 인라인 입력 생성, 계산별 초안과 분극률 출처 보존, 진동·설정 변경 중 모델 재사용, 최신 휠 입력과 오래된 입력 거부, 폴더/확장자 구분을 확인했습니다. 이 결과는 실제 GPU 시험이 아닙니다.
+- 실제 Chrome + 내장 3Dmol.js의 소프트웨어 WebGL: 한국어/Light 화면, 진동 중 GLModel 재사용, 1280×800에서 가로·문서 넘침 없이 Gaussian 생성/다운로드까지 표시, 높이 약 413px인 표시 설정창을 확인했습니다. page error는 0개였습니다.
+- Python compileall, 두 웹 JavaScript 구문 검사, `git diff --check`, CLI `--version`(1.3.0)이 통과했습니다. scikit-image 내부의 NumPy 2.5 deprecation warning 70개는 남아 있습니다.
+
+### 합성 성능 비교
+
+같은 Windows/Python 환경에서 v1.2의 해당 함수를 불러 비교했습니다. 아래 시간은 5회 중앙값이며 실제 Gaussian 실행 시간이나 모든 데이터의 성능을 뜻하지 않습니다.
+
+| 항목 | v1.2 / 캐시 전 | v1.3 / 캐시 후 | 확인 |
+|---|---:|---:|---|
+| cube 읽기: 100³×1, D 지수 1백만 값, 13,333,407 bytes | 0.1287 s | 0.1016 s | 약 21% 시간 감소; 배열 완전 일치 |
+| 같은 cube의 Python 추적 peak 메모리 | 91.47 MiB | 83.73 MiB | 약 8.5% 감소; 전체 프로세스 RSS와는 다름 |
+| fchk 숫자 배열: coefficient 100,000개, 1,560,089 bytes | 0.07861 s | 0.05994 s | 약 24% 시간 감소; 레코드 일치 |
+| 같은 38³ field의 동일 등치면 함수 호출 | 0.001958 s | 0.0000012 s | marching-cubes 재계산 생략; JSON·전송·화면 그리기 제외 |
+
+실제 Windows Tk CPU Canvas에서도 탄소 원자 100개, 620×440 canvas, 회전 redraw 20회와 update_idletasks를 측정했습니다. redraw당 산술 평균은 v1.2 **170.40 ms → v1.3 58.08 ms**로 약 2.93배 빨랐습니다. 위 중앙값 표와는 별도 측정이며 MobaXterm 또는 일반적인 FPS 보장이 아닙니다. 1280×800 실제 Tk 화면에서 가로 한글 글꼴, toolbar/언어 선택, 13개 Gaussian 설정·미리보기·저장이 표시되는 것을 확인했습니다.
+
+실제 Gaussian `formchk/cubegen`, 사용자의 MobaXterm/X11, 실제 GPU와 대형 분자의 장시간 FPS는 검증하지 않았습니다. 원본 격자 해상도·분석 수치·단위는 줄이지 않았으며, 실제 유틸리티 실행 속도는 Gaussian 환경과 파일 크기에 따라 달라집니다.
+
 ## 1.2 검증 — 2026-11-11
 
 - Windows / Python 3.12.14: **65 passed**. 기존 분석·parser·utility adapter 시험과 새 폴더/API·Gaussian 입력·실제 Tk 화면 시험을 포함합니다. NumPy 2.5 / scikit-image 내부의 deprecation warning이 남아 있으며, 전체 통합 실행에서는 Tk Variable의 종료 시점 GC 관련 경고도 1회 관찰했습니다.

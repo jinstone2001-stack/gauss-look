@@ -59,7 +59,7 @@ def test_language_and_theme_preserve_calculation_and_inputs(app):
     app.apply_language("en")
     assert app.panel_select["values"][0] == "Summary"
     assert app.manual.english
-    assert "Language, theme" in app.manual.topics["values"][0]
+    assert any("Language, theme" in topic for topic in app.manual.topics["values"])
     app.preferences["theme"] = "light"
     app.apply_appearance()
     assert app.viewer.cget("background") == "#f6f9fc"

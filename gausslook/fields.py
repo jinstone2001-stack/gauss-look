@@ -1,6 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
+import math
 import numpy as np
 from .model import BOHR_ANG, Calculation
 
@@ -30,46 +31,68 @@ class Field:
 
 
 def read_cube(path):
-    lines = Path(path).read_text(errors="replace").splitlines()
-    if len(lines) < 6:
-        raise ValueError("cube header가 불완전합니다.")
-    header = lines[2].split()
-    nat = int(header[0])
-    origin = np.array(list(map(float, header[1:4])))
-    sizes = []
-    axes = []
-    for line in lines[3:6]:
-        p = line.split()
-        sizes.append(int(p[0]))
-        axes.append(list(map(float, p[1:4])))
-    if len(set(np.sign(sizes))) != 1:
-        raise ValueError("cube 축 단위 부호가 혼합되어 있습니다.")
-    unit = BOHR_ANG if sizes[0] > 0 else 1.0
-    axes = np.array(axes) * unit
-    origin *= unit
-    if abs(np.linalg.det(axes)) < 1e-18:
-        raise ValueError("cube 격자 축이 선형 종속입니다.")
-    atoms = []
-    coords = []
-    for line in lines[6 : 6 + abs(nat)]:
-        p = line.split()
-        atoms.append(int(p[0]))
-        coords.append((np.array(list(map(float, p[2:5]))) * unit).tolist())
-    tokens = " ".join(lines[6 + abs(nat) :]).replace("D", "E").replace("d", "e").split()
+    path = Path(path)
+    with path.open(encoding="utf-8", errors="replace") as stream:
+        comments = [stream.readline(), stream.readline()]
+        header = stream.readline().split()
+        if not all(comments) or len(header) < 4:
+            raise ValueError("cube header가 불완전합니다.")
+        nat = int(header[0])
+        origin = np.array(list(map(float, header[1:4])))
+        sizes, axes = [], []
+        for _ in range(3):
+            row = stream.readline().split()
+            if len(row) < 4:
+                raise ValueError("cube 격자 header가 불완전합니다.")
+            sizes.append(int(row[0]))
+            axes.append(list(map(float, row[1:4])))
+        if 0 in sizes or len(set(np.sign(sizes))) != 1:
+            raise ValueError("cube 축 크기는 0이 아니고 단위 부호가 같아야 합니다.")
+        unit = BOHR_ANG if sizes[0] > 0 else 1.0
+        axes = np.array(axes) * unit
+        origin *= unit
+        if not np.isfinite(axes).all() or not np.isfinite(origin).all():
+            raise ValueError("cube 격자에 NaN/Inf가 있습니다.")
+        if abs(np.linalg.det(axes)) < 1e-18:
+            raise ValueError("cube 격자 축이 선형 종속입니다.")
+        atoms, coords = [], []
+        for _ in range(abs(nat)):
+            row = stream.readline().split()
+            if len(row) < 5:
+                raise ValueError("cube 원자 레코드가 불완전합니다.")
+            atoms.append(int(row[0]))
+            coords.append((np.array(list(map(float, row[2:5]))) * unit).tolist())
+        if not np.isfinite(coords).all():
+            raise ValueError("cube 좌표에 NaN/Inf가 있습니다.")
+        payload = stream.read()
     nfield = int(header[4]) if len(header) > 4 else 1
     ids = None
     if nat < 0:
-        nfield = int(tokens[0])
-        ids = list(map(int, tokens[1 : 1 + nfield]))
-        tokens = tokens[1 + nfield :]
+        record = payload.split(None, 1)
+        if not record:
+            raise ValueError("cube orbital ID 레코드가 없습니다.")
+        nfield = int(record[0])
+        if nfield <= 0:
+            raise ValueError("cube field 수는 양수여야 합니다.")
+        record = record[1].split(None, nfield) if len(record) > 1 else []
+        if len(record) <= nfield:
+            raise ValueError("cube orbital ID/값 레코드가 불완전합니다.")
+        ids = list(map(int, record[:nfield]))
+        payload = record[nfield]
+    if nfield <= 0:
+        raise ValueError("cube field 수는 양수여야 합니다.")
     shape = tuple(abs(s) for s in sizes) + (nfield,)
-    expected = int(np.prod(shape))
+    tokens = payload.replace("D", "E").replace("d", "e").split()
+    expected = math.prod(shape)
     if len(tokens) != expected:
         raise ValueError(f"cube 값 개수 불일치: {len(tokens)} / {expected}")
-    data = np.array(tokens, dtype=float).reshape(shape)
+    try:
+        data = np.asarray(tokens, dtype=float)
+    except ValueError as exc:
+        raise ValueError("cube 숫자 데이터 형식 오류") from exc
     if not np.isfinite(data).all():
         raise ValueError("cube에 NaN/Inf가 있습니다.")
-    return Field(Path(path).name, origin, axes, data, atoms, coords, str(path), ids)
+    return Field(path.name, origin, axes, data.reshape(shape), atoms, coords, str(path), ids)
 
 
 def isosurface(field, level=0.03, channel=0, max_faces=80000):

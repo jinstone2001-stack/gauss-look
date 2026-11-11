@@ -608,7 +608,7 @@ def fchk_records(text):
                         tokens = [row[j : j + width].strip() for j in range(0, len(row), width)]
                         if any(re.fullmatch(FLOAT, t) is None for t in tokens):
                             raise ValueError(f"fchk 숫자 배열 형식 오류: {key}")
-                    v += nums(lines[i])
+                    v.extend(float(t.replace("D", "E").replace("d", "e")) for t in tokens)
                 else:
                     flags = "".join(lines[i].split()).replace(".", "").upper()
                     if any(t not in "TF" for t in flags):

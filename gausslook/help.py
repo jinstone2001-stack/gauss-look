@@ -2,6 +2,16 @@
 
 TOPICS = [
     {
+        "id": "workspace-v13",
+        "title_ko": "1.3 작업공간·입력과 반응 속도",
+        "title_en": "1.3 workspace, input and responsiveness",
+        "summary_ko": "구조·입력 탭에서 Gaussian 설정과 미리보기를 바로 사용합니다. 빠른 스크롤은 최신 입력만 반영합니다.",
+        "summary_en": "Edit Gaussian settings and preview directly in Build / Input. Rapid wheel input keeps only the latest event.",
+        "body_ko": "구조·입력 탭에서 작업, method/basis, 전하/spin, 메모리/core, checkpoint, title, 고급 Route와 추가 입력을 설정하고 미리보기·저장합니다. 테마나 언어를 바꿔도 입력 초안과 선택한 MO·분극률 출처를 유지합니다. 폴더와 파일 형식은 별도 표시로 구분합니다. 한국어에서는 한글 글꼴을 우선 선택하며 서버에도 한글 글꼴이 필요합니다. 회전·확대의 중복 그리기를 합치고 진동 중 모델을 재사용합니다. MO cube는 원본 checkpoint의 경로·크기·수정 시각, spin/MO/격자가 같으면 재사용합니다. 같은 field·등치값의 표면도 최근 8개까지 재사용하며 원래 격자와 단위는 유지합니다. 새 chk 읽기는 원본을 다시 변환하며 Gaussian 실행 자체의 속도는 도구와 계산 크기에 따라 다릅니다.",
+        "body_en": "Build / Input contains job, method/basis, charge/spin, memory/cores, checkpoint, title, advanced Route, additional input, preview and save. Theme/language changes preserve drafts and selected MO/polarizability records. Folder and file-type labels distinguish entries. Korean mode prefers a CJK font; the server still needs an installed Korean font. Rotation/zoom redraws are coalesced and vibration reuses the model. MO cubes are reused for the same checkpoint path/size/modification time, spin/MO and grid. Up to eight recent field/isovalue meshes are reused without changing the original grid or units. Reopening a chk converts its source again; Gaussian utility runtime depends on the tools and calculation size.",
+        "buttons": ["구조·입력", "Build / Input", "미리보기", "Preview"],
+    },
+    {
         "id": "workspace-v12",
         "title_ko": "언어·테마·화면 설정과 표 정렬",
         "title_en": "Language, theme, display settings and table sorting",
@@ -586,7 +596,7 @@ TOPICS.append(
 
 
 def help_payload():
-    return {"version": "1.2.0", "topics": TOPICS, "controls": CONTROLS}
+    return {"version": "1.3.0", "topics": TOPICS, "controls": CONTROLS}
 
 
 def help_for_label(label, english=False):

@@ -28,7 +28,10 @@ c.force_records = [
 c.modes[0]["frequency_cm1"] = -55
 for m in c.modes:
     m["reference_frame"] = 0
-c.properties["polarizability_au"] = [[3, 0, 0], [0, 4, 0], [0, 0, 5]]
+c.properties["polarizability_records"] = [
+    {"tensor_au": [[3, 0, 0], [0, 4, 0], [0, 0, 5]], "frequency_au": 0.0, "source": "static fixture"},
+    {"tensor_au": [[6, 0, 0], [0, 8, 0], [0, 0, 10]], "frequency_au": 0.05, "source": "dynamic fixture"},
+]
 c.orbitals["alpha"]["has_coefficients"] = True
 checkpoint = e.work / "fixture.fchk"
 checkpoint.write_text("fixture")
