@@ -1,3 +1,2 @@
 -r requirements.txt
-rdkit>=2023.9
 ase>=3.23

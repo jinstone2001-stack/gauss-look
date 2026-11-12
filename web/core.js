@@ -47,6 +47,7 @@ function translate(text) {
 function t(text) { return translate(text); }
 function ui(ko, en) { return settings.language === "en" ? en : ko; }
 Object.assign(EN_UI, {
+  "한글 글꼴":"Korean font", "영문 글꼴":"English font", "맑은 고딕":"Malgun Gothic", "굴림":"Gulim",
   "한국어 / 시스템 글꼴":"Korean / system fonts", "크기":"Size", "파일":"File",
   "제목":"Title", "용매 (SMD)":"Solvent (SMD)", "Arial / 맑은 고딕":"Arial / Malgun Gothic", "Calibri / 굴림":"Calibri / Gulim",
   "고유값 / a.u.":"Eigenvalues / a.u.", "부분·조건부":"Partial / conditional", "지원":"Supported", "후속 구현":"Planned",

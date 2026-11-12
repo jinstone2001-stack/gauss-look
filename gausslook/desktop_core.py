@@ -17,6 +17,7 @@ class CorePanels:
         return ko if self.cjk else en
 
     def select_panel(self, name):
+        self.interrupt_animation()
         self.notebook.select(self.panels[name])
         self.panel_select.set(self.panel_names.get(name, name))
 

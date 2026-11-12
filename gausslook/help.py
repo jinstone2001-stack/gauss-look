@@ -2,6 +2,16 @@
 
 TOPICS = [
     {
+        "id": "display-v14",
+        "title_ko": "1.4 언어·글꼴·빌더와 작업 전환",
+        "title_en": "1.4 language, fonts, builder and task switching",
+        "summary_ko": "한글/영문 글꼴을 따로 저장하고, 다른 작업 시작 시 진동 재생을 종료합니다.",
+        "summary_en": "Save Korean/English fonts separately; stop vibration playback when starting another task.",
+        "body_ko": "화면 설정의 한글 글꼴에서 Malgun Gothic(맑은 고딕) 또는 Gulim(굴림), 영문 글꼴에서 Arial 또는 Calibri를 선택합니다. 언어를 다시 바꾸면 해당 언어의 글꼴로 복원합니다. 네이티브/X11은 실행 서버, 웹은 브라우저 PC에 글꼴이 설치되어 있어야 하며 없는 글꼴은 설치된 대체 글꼴로 표시합니다. 글자 크기는 정수로 표시·저장합니다. 네이티브 파일 선택창은 열기가 왼쪽, 취소가 오른쪽입니다. RDKit은 기본 requirements에 포함되며 업데이트 후 python -m pip install -r requirements.txt를 실행합니다. SMILES는 3D conformer를 생성합니다. 다른 분석·파일 읽기·표면 생성이나 패널 이동을 시작하면 진동 타이머를 종료하고 기준 좌표를 복원합니다. 재생은 모드 선택 또는 재생 버튼으로 다시 시작합니다.",
+        "body_en": "In Display settings, select Malgun Gothic or Gulim for Korean and Arial or Calibri for English. Switching language restores its saved font. Fonts must be installed on the native/X11 server or the web browser PC; unavailable fonts use an installed fallback. Font sizes display and save as integers. The native file picker places Open left of Cancel. RDKit is included in the default requirements: run python -m pip install -r requirements.txt after updating. SMILES generates 3D conformers. Starting another analysis, file load, surface operation or panel stops the vibration timer and restores reference coordinates. Select a mode or Play to restart.",
+        "buttons": ["한글 글꼴", "Korean font", "영문 글꼴", "English font"],
+    },
+    {
         "id": "workspace-v13",
         "title_ko": "1.3 작업공간·입력과 반응 속도",
         "title_en": "1.3 workspace, input and responsiveness",
@@ -596,7 +606,7 @@ TOPICS.append(
 
 
 def help_payload():
-    return {"version": "1.3.0", "topics": TOPICS, "controls": CONTROLS}
+    return {"version": "1.4.0", "topics": TOPICS, "controls": CONTROLS}
 
 
 def help_for_label(label, english=False):

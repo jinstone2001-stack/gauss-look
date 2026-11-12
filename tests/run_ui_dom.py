@@ -66,7 +66,7 @@ try:
         ["node", "tests/ui_dom.cjs", f"http://127.0.0.1:{s.server_port}"],
         cwd=root,
         env=env,
-        timeout=45,
+        timeout=90,
     )
     raise SystemExit(result.returncode)
 finally:

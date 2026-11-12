@@ -16,19 +16,29 @@ let state = {},
     language: "ko", theme: "dark", labels: false, hydrogens: true,
     style: "ball", background: "#101b2b", atomScale: 0.3, bondRadius: 0.14,
     selection: "#00d8e6", labelColor: "#f1f5fa", labelSize: 12,
-    font: '"Malgun Gothic","Noto Sans CJK KR",Arial,sans-serif', fontSize: 14,
+    fontKo: "Malgun Gothic", fontEn: "Arial", fontSize: 14,
     elementColors: { H: "#e8edf4", C: "#7891ad", N: "#4d8eff", O: "#ff5b68", F: "#5bd684", P: "#f4a340", S: "#ebd14b", Cl: "#5bd684", Br: "#b56d4b", I: "#aa80db", Sn: "#8bcad5" },
   };
 const defaultSettings = JSON.parse(JSON.stringify(settings));
 try {
+  const saved = JSON.parse(localStorage.getItem("gausslook.settings") || "{}");
   settings = {
     ...settings,
-    ...JSON.parse(localStorage.getItem("gausslook.settings") || "{}"),
+    ...saved,
   };
+  if (typeof saved?.font === "string") {
+    if (!saved.fontEn && saved.font.startsWith("Calibri")) settings.fontEn = "Calibri";
+    if (!saved.fontKo && saved.font.includes('"Gulim"')) settings.fontKo = "Gulim";
+    if (!saved.fontKo && saved.font.startsWith('"Noto Sans CJK KR"')) settings.fontKo = "Noto Sans CJK KR";
+  }
 } catch (e) {}
 settings.elementColors = { ...defaultSettings.elementColors, ...settings.elementColors };
 settings.language = settings.language === "en" ? "en" : "ko";
 settings.theme = settings.theme === "light" ? "light" : "dark";
+delete settings.font;
+for (const key of ["fontKo", "fontEn"])
+  if (typeof settings[key] !== "string" || !settings[key].trim()) settings[key] = defaultSettings[key];
+settings.fontSize = Math.round(Math.max(10, Math.min(24, Number(settings.fontSize) || 14)));
 const tabs = [
   "개요",
   "MO·표면",
@@ -59,6 +69,7 @@ function status(t, error = false) {
   $("status").classList.toggle("error", error);
 }
 async function api(path, body) {
+  if (body !== undefined && !["frame_analysis", "measure"].includes(body.action)) interruptAnimation();
   const r = await fetch(
     path,
     body === undefined
@@ -79,6 +90,7 @@ function button(parent, label, fn) {
   b.title = helpText(label);
   b.onclick = async () => {
     try {
+      interruptAnimation();
       await fn();
     } catch (e) {
       status(e.message, true);
@@ -341,6 +353,7 @@ async function result(d) {
   return d;
 }
 async function poll(id) {
+  interruptAnimation();
   currentTask = id;
   status("작업 진행 중…");
   try {
@@ -476,6 +489,13 @@ function stop() {
   if (timer) clearInterval(timer);
   timer = null;
   $("play").textContent = t("▶ 경로");
+}
+function interruptAnimation() {
+  if (timer) {
+    stop();
+    clearShapes();
+    if (calc?.frames.length) draw(false, calc.frames[frame].coords);
+  }
 }
 function animateMode(index, amp = modeAmplitude) {
   stop();
@@ -886,7 +906,7 @@ function report() {
     "text/html",
   );
 }
-$("uploadBtn").onclick = () => $("upload").click();
+$("uploadBtn").onclick = () => { interruptAnimation(); $("upload").click(); };
 $("upload").onchange = async (event) => {
   for (const file of event.target.files) {
     try {
@@ -1017,6 +1037,7 @@ $("plotSvg").onclick = () => {
 };
 $("browseBtn").onclick = () => browse("").catch((e) => status(e.message, true));
 async function browse(path) {
+  interruptAnimation();
   const d = await api("/api/browse?path=" + encodeURIComponent(path));
   const root = $("modalBody");
   root.className = "";
@@ -1066,7 +1087,8 @@ function applyAppearance() {
   const root = document.documentElement;
   root.dataset.theme = settings.theme;
   root.lang = settings.language;
-  root.style.setProperty("--font", settings.font || defaultSettings.font);
+  const primary = settings.language === "ko" ? settings.fontKo : settings.fontEn;
+  root.style.setProperty("--font", `${JSON.stringify(primary)},"Malgun Gothic","Gulim","Noto Sans CJK KR",Arial,sans-serif`);
   root.style.fontSize = Math.max(10, Math.min(24, Number(settings.fontSize) || 14)) + "px";
   root.style.setProperty("--viewer", settings.background);
   viewer?.setBackgroundColor(settings.background);
@@ -1104,6 +1126,7 @@ function applyLanguage() {
   if (!plotData) $("plotTitle").textContent = t("계산 경로 / 스펙트럼");
 }
 function settingsDialog() {
+  interruptAnimation();
   const p = $("modalBody");
   p.replaceChildren(node("h2", "표시 설정"));
   p.className = "display-settings";
@@ -1111,14 +1134,10 @@ function settingsDialog() {
   p.append(appearance);
   const language = select(appearance, "언어", [["ko", "한국어"], ["en", "English"]], settings.language),
     theme = select(appearance, "테마", [["dark", "다크"], ["light", "라이트"]], settings.theme),
-    font = select(appearance, "폰트", [
-      ['"Malgun Gothic","Noto Sans CJK KR",Arial,sans-serif', "한국어 / 시스템 글꼴"],
-      ['Arial,"Malgun Gothic",sans-serif', "Arial / 맑은 고딕"],
-      ['Calibri,"Gulim",sans-serif', "Calibri / 굴림"],
-      ['"Noto Sans CJK KR",sans-serif', "Noto Sans KR"],
-    ], settings.font),
+    fontKo = select(appearance, "한글 글꼴", [["Malgun Gothic", "맑은 고딕"], ["Gulim", "굴림"], ["Noto Sans CJK KR", "Noto Sans KR"]], settings.fontKo),
+    fontEn = select(appearance, "영문 글꼴", [["Arial", "Arial"], ["Calibri", "Calibri"]], settings.fontEn),
     size = field(appearance, "글자 크기 px", settings.fontSize, "number");
-  size.min = 10; size.max = 24;
+  size.min = 10; size.max = 24; size.step = 1;
   p.append(node("h3", "구조 뷰어"));
   const view = node("div", undefined, "form-grid");
   p.append(view);
@@ -1149,7 +1168,8 @@ function settingsDialog() {
   button(actions, "적용 / 저장", () => {
     const ranges = [[size,10,24],[atoms,0.1,0.8],[bonds,0.04,0.4],[labelSize,8,24]];
     if (ranges.some(([control,min,max]) => !Number.isFinite(+control.value) || +control.value < min || +control.value > max)) throw Error(ui("표시 설정의 숫자 범위를 확인하세요.", "Check the numeric ranges in display settings."));
-    Object.assign(settings, { language: language.value, theme: theme.value, font: font.value, fontSize:+size.value, background:bg.value, selection:selection.value, atomScale:+atoms.value, bondRadius:+bonds.value, labelColor:labelColor.value, labelSize:+labelSize.value, labels:labels.checked, hydrogens:hydrogens.checked, elementColors:Object.fromEntries(Object.entries(elementFields).map(([symbol,input])=>[symbol,input.value])) });
+    if (!Number.isInteger(+size.value)) throw Error(ui("글자 크기는 정수로 입력하세요.", "Enter a whole-number font size."));
+    Object.assign(settings, { language: language.value, theme: theme.value, fontKo: fontKo.value, fontEn: fontEn.value, fontSize:+size.value, background:bg.value, selection:selection.value, atomScale:+atoms.value, bondRadius:+bonds.value, labelColor:labelColor.value, labelSize:+labelSize.value, labels:labels.checked, hydrogens:hydrogens.checked, elementColors:Object.fromEntries(Object.entries(elementFields).map(([symbol,input])=>[symbol,input.value])) });
     saveSettings(); applyAppearance(); applyLanguage(); renderPanel();
     status("표시 설정을 저장했습니다.");
     $("modal").close();
@@ -1165,6 +1185,7 @@ function settingsDialog() {
 $("settingsBtn").onclick = settingsDialog;
 $("displayBtn").onclick = settingsDialog;
 $("language").onchange = () => {
+  interruptAnimation();
   settings.language = $("language").value; saveSettings(); applyLanguage(); applyAppearance(); renderPanel();
 };
 $("themeBtn").onclick = () => {

@@ -1,4 +1,4 @@
-# GaussLook 1.3
+# GaussLook 1.4
 
 Gaussian 16 결과 분석 프로그램입니다. **하나의 Python 분석 엔진을 X11 GUI와 웹 GUI가 공유**합니다.
 
@@ -10,6 +10,14 @@ python GaussLook.py --web --port 8888
 원래 작성한 [구축 기획서](docs/Gaussian16_Analysis_Studio_Planning_KO.md)와 [31쪽 PDF](docs/Gaussian16_Analysis_Studio_Planning_KO.pdf)를 포함합니다. 기획의 전체 범위와 현재 구현을 구분한 [140개 기능 상태표](docs/FEATURE_STATUS.md)를 제공합니다. [내장 도움말의 문서판](docs/USER_GUIDE_KO.md)도 포함합니다.
 
 1.1에서는 **MO/HOMO/LUMO, 진동·허수 모드, 구조별 에너지·Force, 분극률**을 전용 화면에서 분석합니다. `Full title (5/4)` 오류를 일으키던 fchk 문자열 배열을 Gaussian 고정 폭 형식으로 읽도록 수정했습니다. GaussView 전체 기능을 완전히 대체하는 버전은 아닙니다.
+
+## 1.4 업데이트
+
+- 한글(맑은 고딕/굴림)과 영문(Arial/Calibri) 글꼴을 따로 선택·저장합니다. 언어를 반복 전환해도 해당 글꼴로 복원하고, 설치되지 않은 글꼴은 대체 글꼴로 표시합니다.
+- 글자 크기를 정수로 표시하고 기본값의 소수점으로 생기던 적용 오류를 수정했습니다.
+- 네이티브 파일 선택창의 열기를 왼쪽, 취소를 오른쪽으로 배치했습니다.
+- RDKit을 기본 설치에 포함했습니다. 기존 설치도 `python -m pip install -r requirements.txt`로 업데이트해야 SMILES → 3D conformer를 사용할 수 있습니다.
+- 다른 작업이나 분석 패널을 시작하면 진동 애니메이션을 종료하고 기준 좌표로 돌아갑니다.
 
 ## 1.3의 작업공간과 성능 개선
 
@@ -44,7 +52,7 @@ python GaussLook.py --web --port 8888
 
 `Demo`는 합성 예제, `Save project`는 `.glproj` 분석 snapshot, `XYZ`는 현재 구조 좌표, `Report JSON`은 선택 계산의 분석 수치 내보내기입니다. 도움말에 각각의 저장 범위와 사용법을 설명했습니다.
 
-최신 검증 버전은 항상 **main**에 반영하고 버전별 branch도 보관합니다. 이번 버전 branch는 `ver-1.3`입니다.
+최신 검증 버전은 항상 **main**에 반영하고 버전별 branch도 보관합니다. 이번 버전 branch는 `ver-1.4`입니다.
 
 ```bash
 git switch main
@@ -65,7 +73,7 @@ python -m pip install -r requirements.txt
 python GaussLook.py --check
 ```
 
-SMILES conformer와 MOL/SDF/MOL2/PDB/CIF 읽기를 사용하려면 추가 설치합니다.
+RDKit은 기본 설치에 포함되므로 SMILES conformer와 MOL/SDF/MOL2/PDB 읽기를 바로 사용할 수 있습니다. [RDKit 공식 설치 안내](https://www.rdkit.org/docs/Install.html#cross-platform-using-pip)와 같은 `rdkit` 패키지를 사용합니다. CIF 읽기용 ASE는 추가 설치합니다.
 
 ```bash
 python -m pip install -r requirements-optional.txt

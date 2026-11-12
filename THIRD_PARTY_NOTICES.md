@@ -7,7 +7,7 @@ The custom root LICENSE applies to original GaussLook material only. These compo
 - **SciPy**, BSD-3-Clause, installed by pip; https://scipy.org/ .
 - **scikit-image**, BSD-3-Clause, installed by pip; https://scikit-image.org/ .
 - **cclib**, BSD-3-Clause, installed by pip; https://github.com/cclib/cclib . Public cclib-data Gaussian files were used for development validation and are not redistributed as GaussLook examples.
-- **RDKit**, BSD-3-Clause, optional installation; https://www.rdkit.org/ .
+- **RDKit**, BSD-3-Clause, installed with the default requirements; https://www.rdkit.org/ .
 - **ASE**, LGPL-2.1-or-later, optional installation for CIF reading; https://ase-lib.org/ .
 - **Python and Tcl/Tk** retain their respective licenses and are not redistributed by this repository.
 

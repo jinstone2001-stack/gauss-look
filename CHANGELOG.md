@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 - 2026-11-12
+
+- Store Korean and English font choices independently; restore the correct font on repeated language changes instead of inheriting the previous language's Tk font. Offer Malgun Gothic/Gulim and Arial/Calibri with installed-font fallback and migrate earlier preferences.
+- Normalize saved font sizes to integers so the default `10.0` no longer fails the native settings form; reject fractional web font sizes.
+- Place Open to the left of Cancel in the native server-path file picker.
+- Install RDKit with the default requirements so Build / Input can generate SMILES conformers without a separate optional install.
+- Stop active vibration playback and restore reference coordinates before other actions, background tasks or panel changes in both frontends.
+- Add real RDKit builder, native font/language, picker-order, checkpoint animation and DOM/API regressions; retain the shared analysis engine and unchanged LICENSE.
+
 ## 1.3.0 - 2026-11-11
 
 - Embed structured Gaussian settings, preview and save in the native and web Build / Input workspace; preserve SMILES and advanced input.

@@ -10,7 +10,7 @@ from .model import ELEMENTS, COLORS, bonds, xyz_text
 from .analysis import measure
 from .desktop_core import CorePanels
 from .help_ui import install_tooltips
-from .native_appearance import NativeAppearance
+from .native_appearance import NativeAppearance, is_korean_font
 from .native_dialogs import PathFileDialog, gaussian_dialog
 
 
@@ -306,7 +306,7 @@ class App(NativeAppearance, CorePanels):
         self.engine = engine
         self.load_preferences()
         self.root = tk.Tk()
-        self.root.title("GaussLook 1.3 · Gaussian 16 Analysis Studio")
+        self.root.title("GaussLook 1.4 · Gaussian 16 Analysis Studio")
         self.root.geometry("1440x900")
         self.root.minsize(1050, 700)
         self.calc = None
@@ -317,6 +317,7 @@ class App(NativeAppearance, CorePanels):
         self.rows = []
         self.rendered_frame = None
         families = set(font.families(self.root))
+        self.system_font = font.nametofont("TkDefaultFont").actual("family")
         chosen = next(
             (
                 f
@@ -325,7 +326,8 @@ class App(NativeAppearance, CorePanels):
             ),
             "Arial",
         )
-        self.cjk_font = next((f for f in [chosen, *sorted(families)] if not f.startswith("@") and any(k in f.lower() for k in ["cjk kr", "gulim", "nanum", "malgun", "sans kr", "source han sans k", "고딕", "돋움", "굴림", "바탕", "batang", "dotum"])), None)
+        self.cjk_font = next((f for f in [chosen, *sorted(families)] if is_korean_font(f)), None)
+        self.title_font = font.Font(self.root, family=chosen, size=17, weight="bold")
         self.has_cjk_font = self.cjk_font is not None
         if not self.has_cjk_font and not self.preference_path.exists():
             self.language = self.preferences["language"] = "en"
@@ -349,7 +351,7 @@ class App(NativeAppearance, CorePanels):
             ("도움말", self.show_help),
         ]:
             ttk.Button(bar, text=label, command=self.safe(fn)).pack(side="left", padx=3)
-        ttk.Label(bar, text="GaussLook 1.3", font=(chosen, 17, "bold")).pack(side="right", padx=8)
+        ttk.Label(bar, text="GaussLook 1.4", font=self.title_font).pack(side="right", padx=8)
         self.language_var = tk.StringVar(value="한국어" if self.cjk else "English")
         language = ttk.Combobox(bar, textvariable=self.language_var, values=["한국어", "English"], state="readonly", width=8)
         language.pack(side="right", padx=4)
@@ -465,6 +467,7 @@ class App(NativeAppearance, CorePanels):
     def safe(self, fn):
         def run(*args):
             try:
+                self.interrupt_animation()
                 return fn(*args)
             except Exception as e:
                 self.status.configure(text=str(e))
@@ -645,6 +648,11 @@ class App(NativeAppearance, CorePanels):
             self.root.after_cancel(self.animation)
             self.animation = None
 
+    def interrupt_animation(self):
+        if self.animation:
+            self.stop()
+            self.draw()
+
     def play_path(self):
         self.stop()
         if not self.calc or not self.calc.frames:
@@ -770,6 +778,7 @@ class App(NativeAppearance, CorePanels):
             self.load(result["ids"][0])
 
     def watch(self, tid):
+        self.interrupt_animation()
         self.current_task = tid
 
         def poll():
@@ -883,6 +892,7 @@ class App(NativeAppearance, CorePanels):
             )
 
     def surface(self, sign):
+        self.interrupt_animation()
         index = self.field_combo.current()
         if index < 0:
             raise ValueError("cube를 먼저 여세요.")

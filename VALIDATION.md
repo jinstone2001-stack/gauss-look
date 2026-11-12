@@ -1,5 +1,16 @@
 # GaussLook 검증 기록
 
+## 1.4 검증 — 2026-11-12
+
+- Windows / Python 3.12.14: **101개 시험 통과**(core/parser/API/adapter 80개, v1.2·v1.3·v1.4 네이티브 21개). 전체 101 passed 실행 후 최종 통합 실행에서는 Tcl 초기화로 v1.3의 8개가 일시적으로 건너뛰어졌고, 같은 최종 코드의 네이티브 전체를 별도 실행해 **21 passed**를 다시 확인했습니다. NumPy 2.5 / scikit-image 내부의 기존 deprecation warning 70개가 남습니다.
+- 실제 Tk 8.6.12 win32: 맑은 고딕/Arial 및 굴림/Calibri를 각각 저장하고 한국어↔영어를 세 차례 반복해 실제 named font와 버튼 문구·title 글꼴 복원, 계산값 보존을 확인했습니다. `10.0` 구형 설정의 정수 변환과 설정창 기본값 `10`의 변경 없는 저장, 파일 선택창의 열기<취소 x 위치를 검증했습니다. 테스트 런타임의 WindowsApps Tcl 경로 문제는 검증용 Tcl 스크립트를 ignored `.ui-deps` 안에 복사해 해결했으며 제품 코드에는 해당 경로를 넣지 않았습니다.
+- 저장된 모드가 있는 합성 fchk를 실제 parser로 읽고, 네이티브 진동 재생 중 다른 명령·분석 패널·background task를 시작했을 때 타이머 종료와 기준 좌표 복원, 이후 좌표가 다시 움직이지 않는 것을 검증했습니다. 실제 바이너리 chk/formchk 실행과 구분합니다.
+- 실제 RDKit 2026.09.1: 공통 엔진에서 ethanol `CCO`의 MMFF94 conformer 3개, 9원자의 유한 좌표, Gaussian 입력 생성 및 잘못된 SMILES의 실패 처리를 확인했습니다. RDKit은 기본 requirements에 포함되며 기존 설치에는 requirements 재설치가 필요합니다.
+- 실제 HTTP 서버 + jsdom / 모의 renderer: **DOM passed, structures 4, coordinateUpdates 12, surfaces 3, features 140, errors []**. 글꼴별 저장과 반복 언어 전환, 정수 크기와 소수 입력 거부, 작업 요청 시작/패널 이동 직후의 진동 종료, 실제 RDKit SMILES 결과의 viewer 전달을 확인했습니다. 기존 표면·MO·Force·분극률·입력·폴더 범위 시험도 포함합니다. 이 시험은 실제 GPU 렌더 검증이 아닙니다.
+- 실제 Chrome / 내장 3Dmol.js: 합성 물 분자의 WebGL 표시, 맑은 고딕/Arial 기본 설정, 굴림/Calibri 저장, 정수 크기 `14`, 한국어로 바꾼 뒤 영어로 복원된 화면을 직접 확인했습니다. 모든 GPU·브라우저나 대형 분자의 성능을 측정한 시험은 아닙니다.
+- Python compileall, 두 웹 JavaScript 구문 검사, `pip check`, `GaussLook.py --check` 통과. 버전은 1.4.0이며 RDKit이 발견됩니다. LICENSE와 기존 기획 문서는 수정하지 않았습니다.
+- 이번 버전에서 실제 Gaussian `formchk/cubegen`, 새 Gaussian 계산, 사용자 서버의 MobaXterm/X11 글꼴 조합은 재검증하지 않았습니다. Linux/Xvfb 검증은 GitHub CI로 실행합니다. 선택 글꼴은 네이티브 실행 서버 또는 웹 브라우저 PC에 설치되어 있어야 합니다.
+
 ## 1.3 검증 — 2026-11-11
 
 - 검증 대상은 `D:\Codex\05.gauss-look`입니다. 이전 ChatGPT 대화의 v1.3 요청(성능, Build/Input 인라인 Gaussian 설정, 스크롤 누적 해소, Light 대비, 파일 구분, 한글 표시, 설정 간격)을 기준으로 v1.2에서 이어서 구현했습니다. 원본 기획서와 LICENSE는 변경하지 않았습니다.

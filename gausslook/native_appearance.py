@@ -31,6 +31,12 @@ LABELS = {
 }
 
 
+def is_korean_font(family):
+    return not family.startswith("@") and any(part in family.casefold() for part in (
+        "cjk kr", "gulim", "nanum", "malgun", "sans kr", "source han sans k",
+        "고딕", "돋움", "굴림", "바탕", "batang", "dotum"))
+
+
 def sortable_value(value):
     """Sort numeric strings numerically; retain nonnumeric and missing values."""
     text = str(value).strip()
@@ -70,7 +76,7 @@ def install_sorting(tree):
 class NativeAppearance:
     def load_preferences(self):
         self.preference_path = self.engine.root / ".gausslook-ui.json"
-        self.preferences = {"language": "ko", "theme": "dark", "font_family": "", "font_size": 10,
+        self.preferences = {"language": "ko", "theme": "dark", "font_family_ko": "Malgun Gothic", "font_family_en": "Arial", "font_size": 10,
                             "atom_scale": 1.0, "bond_scale": 1.0, "selection": "#09bfd6",
                             "element_colors": {}, "text_colors": {}, "last_directory": str(self.engine.root),
                             "background": "", "style": "ball", "labels": False, "hydrogens": True}
@@ -78,6 +84,11 @@ class NativeAppearance:
             saved = json.loads(self.preference_path.read_text(encoding="utf-8"))
             if isinstance(saved, dict):
                 self.preferences.update({key: value for key, value in saved.items() if key in self.preferences})
+                legacy = saved.get("font_family")
+                if isinstance(legacy, str) and legacy and not legacy.startswith("@"):
+                    key = "font_family_ko" if is_korean_font(legacy) else "font_family_en"
+                    if key not in saved:
+                        self.preferences[key] = legacy
         except (OSError, ValueError):
             pass
         if self.preferences["language"] not in ("ko", "en"):
@@ -89,6 +100,11 @@ class NativeAppearance:
                 value = float(self.preferences[key])
                 self.preferences[key] = max(low, min(high, value)) if math.isfinite(value) else fallback
             except (TypeError, ValueError):
+                self.preferences[key] = fallback
+        self.preferences["font_size"] = int(self.preferences["font_size"])
+        for key, fallback in (("font_family_ko", "Malgun Gothic"), ("font_family_en", "Arial")):
+            value = self.preferences[key]
+            if not isinstance(value, str) or not value.strip() or value.startswith("@"):
                 self.preferences[key] = fallback
         for key in ("text_colors", "element_colors"):
             if not isinstance(self.preferences[key], dict):
@@ -115,6 +131,7 @@ class NativeAppearance:
         return ko if self.cjk else en
 
     def apply_language(self, language=None):
+        self.interrupt_animation()
         if language:
             self.language = language
         self.cjk = self.language == "ko"
@@ -172,12 +189,15 @@ class NativeAppearance:
                         "accent": "#09bfd6" if dark else "#087a9a"}
         p = self.palette
         colors = settings["text_colors"]
-        family = settings["font_family"] or font.nametofont("TkDefaultFont").actual("family")
-        if self.cjk and (family.startswith("@") or not any(part in family.lower() for part in ("cjk kr", "gulim", "nanum", "malgun", "sans kr", "source han sans k", "고딕", "돋움", "굴림", "바탕", "batang", "dotum"))):
-            family = getattr(self, "cjk_font", None) or family
+        available = {name.casefold(): name for name in font.families(self.root) if not name.startswith("@")}
+        fallback = (self.cjk_font or self.system_font) if self.cjk else available.get("arial", self.system_font)
+        family = available.get(settings["font_family_ko" if self.cjk else "font_family_en"].casefold(), fallback)
+        if self.cjk and not is_korean_font(family):
+            family = self.cjk_font or family
         size = int(settings["font_size"])
         for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont"):
             font.nametofont(name).configure(family=family, size=size)
+        self.title_font.configure(family=family, size=size + 7)
         style = ttk.Style(self.root)
         style.configure(".", background=p["panel"], foreground=colors.get("body", p["fg"]), font="TkDefaultFont")
         for name in ("TFrame", "TLabelframe", "TNotebook", "TNotebook.Tab", "TPanedwindow"):
@@ -245,15 +265,14 @@ class NativeAppearance:
         general, elements = ttk.Frame(notebook, padding=6), ttk.Frame(notebook, padding=6)
         notebook.add(general, text=self.words("글꼴 / 화면", "Font / display"))
         notebook.add(elements, text=self.words("원소별 색상", "Element colors"))
-        variables = {key: tk.StringVar(value=str(self.preferences[key])) for key in ("font_family", "font_size", "theme", "atom_scale", "bond_scale")}
-        if not variables["font_family"].get():
-            variables["font_family"].set(font.nametofont("TkDefaultFont").actual("family"))
-        entries = [("글꼴", "Font", "font_family", sorted(set(font.families(self.root)))), ("크기 pt", "Size pt", "font_size", list(range(8, 25))), ("모드", "Theme", "theme", ["dark", "light"]), ("원자 크기", "Atom scale", "atom_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"]), ("결합 굵기", "Bond scale", "bond_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"])]
+        variables = {key: tk.StringVar(value=str(self.preferences[key])) for key in ("font_family_ko", "font_family_en", "font_size", "theme", "atom_scale", "bond_scale")}
+        families = sorted(name for name in set(font.families(self.root)) if not name.startswith("@"))
+        entries = [("한글 글꼴", "Korean font", "font_family_ko", list(dict.fromkeys(["Malgun Gothic", "Gulim", *filter(is_korean_font, families)]))), ("영문 글꼴", "English font", "font_family_en", ["Arial", "Calibri"]), ("크기 pt", "Size pt", "font_size", list(range(8, 25))), ("모드", "Theme", "theme", ["dark", "light"]), ("원자 크기", "Atom scale", "atom_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"]), ("결합 굵기", "Bond scale", "bond_scale", ["0.5", "0.75", "1.0", "1.25", "1.5", "2.0"])]
         for row, (ko, en, key, values) in enumerate(entries):
             ttk.Label(general, text=self.words(ko, en)).grid(row=row, column=0, sticky="w", pady=2, padx=3)
-            ttk.Combobox(general, textvariable=variables[key], values=values, width=30).grid(row=row, column=1, sticky="ew", pady=2)
+            ttk.Combobox(general, textvariable=variables[key], values=values, width=30, state="readonly" if key.startswith("font_family") else "normal").grid(row=row, column=1, sticky="ew", pady=2)
         general.columnconfigure(1, weight=1)
-        ttk.Label(general, text=self.words("한글 글꼴은 X11 실행 서버에 설치되어 있어야 합니다.\n설정은 현재 작업 폴더의 .gausslook-ui.json에 저장됩니다.", "Korean fonts must be installed on the X11 server.\nPreferences are stored in .gausslook-ui.json in the working folder."), wraplength=540).grid(row=5, column=0, columnspan=2, sticky="w", pady=5)
+        ttk.Label(general, text=self.words("Malgun Gothic = 맑은 고딕 · Gulim = 굴림\n글꼴은 실행 서버에 설치되어 있어야 합니다.", "Fonts must be installed on the native/X11 server.\nMissing fonts use an installed fallback."), wraplength=540).grid(row=6, column=0, columnspan=2, sticky="w", pady=5)
 
         def choose_color(key):
             value = colorchooser.askcolor(parent=win, initialcolor=self.preferences["text_colors"].get(key, self.palette["fg"]))[1]
@@ -262,7 +281,7 @@ class NativeAppearance:
                 self.apply_appearance()
 
         for index, (key, ko, en) in enumerate([("body", "본문 색상", "Body color"), ("button", "버튼 글자색", "Button text color"), ("input", "입력 글자색", "Input text color"), ("status", "상태 글자색", "Status text color"), ("label", "3D 라벨 색상", "3D label color")]):
-            ttk.Button(general, text=self.words(ko, en), command=lambda key=key: choose_color(key)).grid(row=6 + index // 2, column=index % 2, sticky="ew", padx=4, pady=4)
+            ttk.Button(general, text=self.words(ko, en), command=lambda key=key: choose_color(key)).grid(row=7 + index // 2, column=index % 2, sticky="ew", padx=4, pady=4)
 
         def selection_color():
             value = colorchooser.askcolor(parent=win, initialcolor=self.preferences["selection"])[1]
@@ -275,8 +294,8 @@ class NativeAppearance:
             if value:
                 self.preferences["background"] = value
                 self.apply_appearance()
-        ttk.Button(general, text=self.words("뷰어 배경색", "Viewer background"), command=background_color).grid(row=9, column=0, sticky="ew", padx=4, pady=4)
-        ttk.Button(general, text=self.words("테마 기본색 복원", "Reset theme colors"), command=lambda: (self.preferences.update(background="", text_colors={}), self.apply_appearance())).grid(row=9, column=1, sticky="ew", padx=4)
+        ttk.Button(general, text=self.words("뷰어 배경색", "Viewer background"), command=background_color).grid(row=10, column=0, sticky="ew", padx=4, pady=4)
+        ttk.Button(general, text=self.words("테마 기본색 복원", "Reset theme colors"), command=lambda: (self.preferences.update(background="", text_colors={}), self.apply_appearance())).grid(row=10, column=1, sticky="ew", padx=4)
         tree = ttk.Treeview(elements, columns=("z", "element", "color"), show="headings", height=10)
         for key, label in [("z", "Z"), ("element", "Element"), ("color", "RGB")]:
             tree.heading(key, text=label)
@@ -315,7 +334,10 @@ class NativeAppearance:
             scales = {key: float(variables[key].get()) for key in ("atom_scale", "bond_scale")}
             if not all(math.isfinite(value) and .3 <= value <= 3 for value in scales.values()):
                 raise ValueError("Atom / bond scales: 0.3–3.0")
-            self.preferences.update(font_family=variables["font_family"].get(), font_size=size, theme=variables["theme"].get(), **scales)
+            fonts = {key: variables[key].get().strip() for key in ("font_family_ko", "font_family_en")}
+            if any(not value or value.startswith("@") for value in fonts.values()):
+                raise ValueError("Choose a horizontal font family.")
+            self.preferences.update(**fonts, font_size=size, theme=variables["theme"].get(), **scales)
             self.apply_appearance()
 
         def apply():

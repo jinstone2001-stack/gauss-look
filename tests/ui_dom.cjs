@@ -101,11 +101,12 @@ w.$3Dmol = {
   },
 };
 w.addEventListener("error", (e) => errors.push(e.message));
+w.localStorage.setItem("gausslook.settings", JSON.stringify({font:'Calibri,"Gulim",sans-serif', fontSize:"14.0"}));
 w.eval(
   fs.readFileSync(path.join(root, "web/core.js"), "utf8") +
     "\n" +
     fs.readFileSync(path.join(root, "web/app.js"), "utf8") +
-    "\nglobalThis.testTable = table;",
+    "\nglobalThis.testTable = table; globalThis.testAction = action; globalThis.testAnimateMode = animateMode; globalThis.testTimer = () => timer;",
 );
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const click = (text) => {
@@ -115,8 +116,8 @@ const click = (text) => {
   assert(button, `button missing: ${text}`);
   button.click();
 };
-async function until(fn) {
-  for (let i = 0; i < 150; i++) {
+async function until(fn, attempts = 150) {
+  for (let i = 0; i < attempts; i++) {
     if (fn()) return;
     await wait(30);
   }
@@ -203,6 +204,21 @@ async function until(fn) {
   click("정지");
   click("평형 구조");
   assert.equal(w.document.getElementById("frame").value, "0");
+  w.document.querySelector(".modes tbody tr").click();
+  await wait(160);
+  assert(w.testTimer());
+  // The task is still pending when its request begins; animation must stop now.
+  const measurePending = w.testAction("input");
+  assert.equal(w.testTimer(), null);
+  await measurePending;
+  const stoppedCoordinates = coordinateUpdates;
+  await wait(160);
+  assert.equal(coordinateUpdates, stoppedCoordinates);
+  w.document.querySelector(".modes tbody tr").click();
+  await wait(160);
+  click("MO·표면");
+  assert.equal(w.testTimer(), null, "changing panels must stop mode animation");
+  click("진동·분광");
   click("스펙트럼 그리기");
   await until(() =>
     w.document.getElementById("plotTitle").textContent.startsWith("IR"),
@@ -241,6 +257,8 @@ async function until(fn) {
   language.dispatchEvent(new w.Event("change"));
   await until(() => w.document.getElementById("demoBtn").textContent === "Demo");
   assert.equal(w.document.documentElement.lang, "en");
+  assert(w.document.documentElement.style.getPropertyValue("--font").startsWith('"Calibri"'), "legacy English font must migrate");
+  assert.equal(JSON.parse(w.localStorage.getItem("gausslook.settings")).fontKo, "Gulim");
   assert.equal(JSON.parse(w.localStorage.getItem("gausslook.settings")).language, "en");
   click("Overview");
   assert(w.document.getElementById("panel").textContent.includes("Selected result:"));
@@ -251,6 +269,28 @@ async function until(fn) {
   assert.equal(w.document.documentElement.dataset.theme, "light");
   click("Display settings");
   assert(w.document.getElementById("modalBody").textContent.includes("Atom scale"));
+  const settingControl = label => [...w.document.querySelectorAll("#modalBody label.field")]
+    .find(l => l.firstChild.textContent === label).querySelector("input,select");
+  assert.equal(settingControl("Font size (px)").value, "14");
+  assert.equal(settingControl("Font size (px)").step, "1");
+  settingControl("Korean font").value = "Gulim";
+  settingControl("English font").value = "Calibri";
+  settingControl("Font size (px)").value = "14.5";
+  click("Apply / save");
+  await until(() => w.document.getElementById("status").textContent.includes("whole-number"));
+  assert.equal(w.document.getElementById("modal").open, true);
+  settingControl("Font size (px)").value = "14";
+  click("Apply / save");
+  const savedFonts = JSON.parse(w.localStorage.getItem("gausslook.settings"));
+  assert.equal(savedFonts.fontKo, "Gulim"); assert.equal(savedFonts.fontEn, "Calibri");
+  for (let i=0; i<3; i++) {
+    language.value = "ko"; language.dispatchEvent(new w.Event("change"));
+    assert(w.document.documentElement.style.getPropertyValue("--font").startsWith('"Gulim"'));
+    language.value = "en"; language.dispatchEvent(new w.Event("change"));
+    assert(w.document.documentElement.style.getPropertyValue("--font").startsWith('"Calibri"'));
+    assert.equal(w.document.getElementById("demoBtn").textContent, "Demo");
+  }
+  click("Display settings");
   click("Close");
   click("Server folder");
   await until(() => w.document.getElementById("browsePath"));
@@ -316,6 +356,11 @@ async function until(fn) {
   language.dispatchEvent(new w.Event("change"));
   await until(() => w.document.getElementById("demoBtn").textContent === "데모");
   assert.equal(w.document.documentElement.lang, "ko");
+  click("구조·입력");
+  w.document.getElementById("buildSmiles").value = "CCO";
+  click("3D conformer 생성");
+  await until(() => w.document.querySelector("#jobs .active b").textContent === "SMILES / CCO", 1500);
+  assert(structures > structuresBeforeStyle, "the RDKit builder result must reach the viewer");
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({

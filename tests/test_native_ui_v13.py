@@ -105,7 +105,7 @@ def test_embedded_input_uses_current_frame_and_validates_without_dialog(app):
 
 
 def test_light_theme_graph_colors_and_korean_font_fallback(app):
-    app.preferences.update(theme="light", font_family="Arial")
+    app.preferences.update(theme="light", font_family_ko="Arial")
     app.apply_language("ko")
     app.apply_appearance()
     assert ttk.Style(app.root).lookup("TButton", "foreground", ("active",)) == "#192d41"
@@ -117,7 +117,7 @@ def test_light_theme_graph_colors_and_korean_font_fallback(app):
     assert text_items
     assert all(app.mo_graph.itemcget(item, "font") == "TkDefaultFont" for item in text_items)
     assert "#c5d3e4" not in {app.mo_graph.itemcget(item, "fill") for item in text_items}
-    app.preferences["font_family"] = ""
+    app.preferences["font_family_ko"] = "Malgun Gothic"
 
 
 def test_language_retains_selected_orbital_and_polarizability_source(app):
